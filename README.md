@@ -128,6 +128,7 @@ pnpm wrangler:dev
 
 ## Available Scripts
 
+
 | Command | Description |
 |---------|-------------|
 | `pnpm dev` | Start all apps in development mode |

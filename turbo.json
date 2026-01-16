@@ -5,7 +5,8 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": ["SANITY_STUDIO_PROJECT_ID", "SANITY_STUDIO_DATASET", "SANITY_TOKEN"]
     },
     "//#format-and-lint": {},
     "//#format-and-lint:fix": {
@@ -40,8 +41,9 @@
     },
     "@apps/web#build": {
       "dependsOn": ["@packages/sanity#build"],
-      "outputs": [".next/**", "!.next/cache/**"],
-      "cache": true
+      "outputs": ["dist/**"],
+      "cache": true,
+      "env": ["SANITY_STUDIO_PROJECT_ID", "SANITY_STUDIO_DATASET", "SANITY_TOKEN"]
     }
   }
 }

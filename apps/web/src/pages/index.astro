@@ -1,10 +1,12 @@
 ---
-import { sanityClient } from '@/lib/sanity';
+import { getClient } from '@/lib/sanity';
 import { HOME_QUERY } from '@packages/sanity/queries';
+import type { HOME_QUERY_RESULT } from '@packages/sanity/types';
 import Layout from '../layouts/layout.astro';
 export const prerender = true
 
-const homeData = await sanityClient.fetch(HOME_QUERY);
+const sanityClient = getClient(Astro.locals.runtime.env);
+const homeData = await sanityClient.fetch<HOME_QUERY_RESULT>(HOME_QUERY);
 ---
 
 <Layout>
