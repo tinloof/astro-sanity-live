@@ -166,15 +166,21 @@ type ArrayOf<T> = Array<
 
 // Source: src/queries/index.ts
 // Variable: HOME_QUERY
-// Query: *[_type == "home"][0] {title}
+// Query: *[_type == "home"][0]
 export type HOME_QUERY_RESULT = {
-  title: string | null;
+  _id: string;
+  _type: "home";
+  _createdAt: string;
+  _updatedAt: string;
+  _rev: string;
+  title?: string;
+  description?: string;
 } | null;
 
 // Query TypeMap
 import "@sanity/client";
 declare module "@sanity/client" {
   interface SanityQueries {
-    '*[_type == "home"][0] {title}': HOME_QUERY_RESULT;
+    '*[_type == "home"][0]': HOME_QUERY_RESULT;
   }
 }
