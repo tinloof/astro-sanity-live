@@ -6,9 +6,9 @@ import Layout from '../layouts/layout.astro';
 export const prerender = true
 
 const sanityClient = getClient({
-  SANITY_STUDIO_PROJECT_ID: import.meta.env.SANITY_STUDIO_PROJECT_ID,
-  SANITY_STUDIO_DATASET: import.meta.env.SANITY_STUDIO_DATASET,
-  SANITY_TOKEN: import.meta.env.SANITY_TOKEN,
+  SANITY_STUDIO_PROJECT_ID: process.env.SANITY_STUDIO_PROJECT_ID,
+  SANITY_STUDIO_DATASET: process.env.SANITY_STUDIO_DATASET,
+  SANITY_TOKEN: process.env.SANITY_TOKEN,
 } as Env);
 const homeData = await sanityClient.fetch<HOME_QUERY_RESULT>(HOME_QUERY);
 ---
