@@ -26,9 +26,9 @@ importers:
       '@astrojs/react':
         specifier: ^4.4.2
         version: 4.4.2(@types/node@25.0.0)(@types/react-dom@19.2.3(@types/react@19.2.8))(@types/react@19.2.8)(jiti@2.6.1)(lightningcss@1.30.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tsx@4.21.0)(yaml@2.8.2)
-      '@sanity/client':
-        specifier: ^7.14.0
-        version: 7.14.0(debug@4.4.3)
+      '@tinloof/sanity-astro':
+        specifier: workspace:*
+        version: link:../../packages/sanity-astro
       '@types/react':
         specifier: ^19.2.8
         version: 19.2.8
@@ -91,6 +91,15 @@ importers:
       watch:
         specifier: ^1.0.2
         version: 1.0.2
+
+  packages/sanity-astro:
+    dependencies:
+      '@sanity/client':
+        specifier: ^7.14.0
+        version: 7.14.0(debug@4.4.3)
+      astro:
+        specifier: ^5.0.0
+        version: 5.16.10(@types/node@25.0.0)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.53.3)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
 
 packages:
 

@@ -1,0 +1,17 @@
+{
+  "name": "@tinloof/sanity-astro",
+  "private": true,
+  "version": "1.0.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    "./init": "./src/init.ts",
+    "./SanityLive.astro": "./src/SanityLive.astro"
+  },
+  "dependencies": {
+    "@sanity/client": "^7.14.0"
+  },
+  "peerDependencies": {
+    "astro": "^5.0.0"
+  }
+}

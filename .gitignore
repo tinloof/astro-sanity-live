@@ -11,6 +11,7 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+.dev.vars
 
 # Testing
 coverage
@@ -36,3 +37,18 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+
+# Claude Code
+.claude/
+
+# Sanity
+.sanity/
+
+# Cloudflare
+.wrangler/
+
+# Astro
+.astro/
+
+# Sanity Studio build output
+public/cms/

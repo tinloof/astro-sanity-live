@@ -4,15 +4,16 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev --port 3000",
-    "wrangler:dev": "pnpm build && pnpm wrangler dev",
+    "wrangler:dev": "pnpm build && wrangler dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "wrangler:deploy": "wrangler deploy"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.12",
     "@astrojs/react": "^4.4.2",
-    "@sanity/client": "^7.14.0",
+    "@tinloof/sanity-astro": "workspace:*",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "astro": "^5.16.10",

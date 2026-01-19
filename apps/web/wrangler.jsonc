@@ -1,6 +1,6 @@
 {
 	"main": "dist/_worker.js/index.js",
-  "name": "astro-sanity-starter",
+  "name": "sanity-live-astro",
   "compatibility_date": "2026-01-16",
   "compatibility_flags": [
     "nodejs_compat",
@@ -12,5 +12,9 @@
 	},
 	"observability": {
     "enabled": true
+  },
+  "vars": {
+    "PUBLIC_SANITY_PROJECT_ID": "fl1nk1cy",
+    "PUBLIC_SANITY_DATASET": "production"
   }
 }
