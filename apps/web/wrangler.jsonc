@@ -1,6 +1,6 @@
 {
 	"main": "dist/_worker.js/index.js",
-  "name": "sanity-live-astro",
+  "name": "astro-sanity-starter",
   "compatibility_date": "2026-01-16",
   "compatibility_flags": [
     "nodejs_compat",
