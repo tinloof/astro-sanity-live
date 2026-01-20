@@ -1,5 +1,5 @@
 import { enableVisualEditing, type HistoryRefresh } from '@sanity/visual-editing'
-import { createClient } from '@sanity/client'
+import { createClient, type SanityClient } from '@sanity/client'
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { VISUAL_EDITING_ENABLED } from '../constants'
 import { useLiveMode } from '../loader'
@@ -60,6 +60,15 @@ function clearVisualEditingCookie(): void {
 }
 
 /**
+ * Separate component that enables live mode.
+ * This allows us to conditionally render it (avoiding the hook when not needed).
+ */
+function LiveModeEnabler({ client }: { client: SanityClient }) {
+  useLiveMode({ client })
+  return null
+}
+
+/**
  * React component that enables Sanity Visual Editing.
  * Shows an exit button when visual editing is active.
  */
@@ -74,9 +83,9 @@ export default function VisualEditingComponent({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isReloadingRef = useRef(false)
 
-  // Create browser client for live mode (always create if config exists)
+  // Create browser client for live mode (only when enabled and config exists)
   const browserClient = useMemo(() => {
-    if (!config) return null
+    if (!isEnabled || !config) return null
     return createClient({
       projectId: config.projectId,
       dataset: config.dataset,
@@ -87,16 +96,10 @@ export default function VisualEditingComponent({
         studioUrl: config.studioUrl,
       },
     })
-  }, [config])
+  }, [isEnabled, config])
 
-  // Enable live mode when refresh='live', we have a client, and visual editing is enabled
-  // This enables real-time updates via the query store
-  // Note: useLiveMode must be called unconditionally (React hooks rule),
-  // but passing undefined client disables it
+  // Determine if we should enable live mode
   const shouldEnableLiveMode = isEnabled && refresh === 'live' && browserClient
-  useLiveMode({
-    client: shouldEnableLiveMode ? browserClient : undefined,
-  })
 
   useEffect(() => {
     console.log('[VisualEditing] Debug:', {
@@ -181,28 +184,34 @@ export default function VisualEditingComponent({
   if (!isEnabled) return null
 
   return (
-    <button
-      onClick={() => {
-        clearVisualEditingCookie()
-        window.location.reload()
-      }}
-      style={{
-        position: 'fixed',
-        bottom: '16px',
-        right: '16px',
-        zIndex: zIndex + 1,
-        padding: '8px 16px',
-        backgroundColor: '#1a1a1a',
-        color: '#fff',
-        border: 'none',
-        borderRadius: '6px',
-        fontSize: '14px',
-        fontFamily: 'system-ui, sans-serif',
-        cursor: 'pointer',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-      }}
-    >
-      Exit Visual Editing
-    </button>
+    <>
+      {/* Enable live mode only when needed - renders nothing but enables the subscription */}
+      {shouldEnableLiveMode && browserClient && (
+        <LiveModeEnabler client={browserClient} />
+      )}
+      <button
+        onClick={() => {
+          clearVisualEditingCookie()
+          window.location.reload()
+        }}
+        style={{
+          position: 'fixed',
+          bottom: '16px',
+          right: '16px',
+          zIndex: zIndex + 1,
+          padding: '8px 16px',
+          backgroundColor: '#1a1a1a',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '6px',
+          fontSize: '14px',
+          fontFamily: 'system-ui, sans-serif',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }}
+      >
+        Exit Visual Editing
+      </button>
+    </>
   )
 }
