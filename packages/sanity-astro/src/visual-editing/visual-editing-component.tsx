@@ -88,7 +88,18 @@ export default function VisualEditingComponent({
   refreshDebounce = 500,
   config,
 }: VisualEditingComponentProps) {
-  // Use lazy initialization to check cookie synchronously on first render
+  // Log immediately on render (before hooks)
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search)
+    console.log('[VisualEditing] Initial check:', {
+      search: window.location.search,
+      hasParam: urlParams.has(VISUAL_EDITING_ENABLED),
+      paramValue: urlParams.get(VISUAL_EDITING_ENABLED),
+      allParams: Array.from(urlParams.entries()),
+    })
+  }
+
+  // Use lazy initialization to check cookie/URL synchronously on first render
   const [isEnabled, setIsEnabled] = useState(getInitialVisualEditingState)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isReloadingRef = useRef(false)
@@ -112,10 +123,17 @@ export default function VisualEditingComponent({
   const shouldEnableLiveMode = isEnabled && refresh === 'live' && browserClient
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const hasUrlParam = urlParams.has(VISUAL_EDITING_ENABLED)
+    const hasCookie = document.cookie.includes(`${VISUAL_EDITING_ENABLED}=true`)
+
     console.log('[VisualEditing] Debug:', {
       isEnabled,
       isInIframe: window.self !== window.top,
       url: window.location.href,
+      search: window.location.search,
+      hasUrlParam,
+      hasCookie,
       refreshMode: refresh,
       hasConfig: !!config,
       hasBrowserClient: !!browserClient,
