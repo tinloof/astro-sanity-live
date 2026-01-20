@@ -5,6 +5,9 @@ import { structureTool } from "sanity/structure";
 
 import { schemaTypes } from "./src/sanity/schema";
 
+// Preview URL - use production URL when deployed, localhost for dev
+const previewUrl = process.env.SANITY_STUDIO_PREVIEW_URL || "http://localhost:3000";
+
 export default defineConfig({
   name: "default",
   title: "Brandyour CF",
@@ -13,7 +16,8 @@ export default defineConfig({
   plugins: [
     structureTool(),
     presentationTool({
-      previewUrl: "http://localhost:3000?sanity-visual-editing",
+      // The ?sanity-visual-editing param triggers visual editing mode via cookie
+      previewUrl: `${previewUrl}?sanity-visual-editing`,
     }),
     visionTool(),
   ],

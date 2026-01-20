@@ -48,6 +48,9 @@ type AstroGlobal = {
   }
   url: URL
   locals?: {
+    // Cloudflare adapter puts ctx directly on locals (not nested under runtime)
+    ctx?: ExecutionContext
+    // Some setups may have it nested
     runtime?: {
       ctx?: ExecutionContext
     }
@@ -213,7 +216,8 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     const activeClient = visualEditing ? stegaClient : client
 
     // Get Cloudflare execution context for caching
-    const ctx = Astro.locals?.runtime?.ctx ?? null
+    // Try both locations - direct on locals (new adapter) and nested under runtime (legacy)
+    const ctx = Astro.locals?.ctx ?? Astro.locals?.runtime?.ctx ?? null
 
     // Determine cache options - disable for visual editing, use defaults otherwise
     const shouldCache = !visualEditing && cacheOption !== false

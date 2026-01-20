@@ -70,24 +70,49 @@ function createCacheKey(
 }
 
 /**
- * Check if a cached response should be revalidated
+ * Calculate the age of a cached response in seconds
  */
-function shouldRevalidate(response: Response): boolean {
-  const ageHeader = response.headers.get('age')
-  const cacheControlHeader = response.headers.get('x-cache-control')
+function getCacheAge(response: Response): number {
+  const cacheTime = response.headers.get('x-cache-time')
+  if (!cacheTime) return 0
 
-  if (!ageHeader || !cacheControlHeader) return false
+  const cachedAt = new Date(cacheTime).getTime()
+  const now = Date.now()
+  return Math.floor((now - cachedAt) / 1000)
+}
+
+/**
+ * Check if a cached response is still fresh (within maxAge)
+ */
+function isFresh(response: Response): boolean {
+  const cacheControlHeader = response.headers.get('x-cache-control')
+  if (!cacheControlHeader) return false
 
   const directives = parseCacheControl(cacheControlHeader)
+  const maxAge = directives['max-age']
+
+  if (typeof maxAge !== 'number') return false
+
+  const age = getCacheAge(response)
+  return age <= maxAge
+}
+
+/**
+ * Check if a cached response is stale but within the SWR window
+ */
+function isStaleButValid(response: Response): boolean {
+  const cacheControlHeader = response.headers.get('x-cache-control')
+  if (!cacheControlHeader) return false
+
+  const directives = parseCacheControl(cacheControlHeader)
+  const maxAge = directives['max-age']
   const swr = directives['stale-while-revalidate']
 
-  if (typeof swr !== 'number') return false
+  if (typeof maxAge !== 'number' || typeof swr !== 'number') return false
 
-  const age = parseInt(ageHeader, 10)
-  if (isNaN(age)) return false
-
-  // Revalidate if age exceeds the stale-while-revalidate window
-  return age > swr
+  const age = getCacheAge(response)
+  // Stale if past maxAge but within maxAge + swr
+  return age > maxAge && age <= (maxAge + swr)
 }
 
 /**
@@ -120,12 +145,26 @@ export async function cachedFetch<T>(
   } = options
 
   // If no execution context (e.g., dev mode), skip caching
-  if (!ctx || typeof caches === 'undefined') {
+  if (!ctx) {
+    console.log('[Cache] No execution context, skipping cache')
+    const data = await fetchFn()
+    return { data, status: 'MISS' }
+  }
+
+  // Check if caches API is available (Cloudflare Workers)
+  if (typeof caches === 'undefined') {
+    console.log('[Cache] caches API not available, skipping cache')
     const data = await fetchFn()
     return { data, status: 'MISS' }
   }
 
   const cache = caches.default
+  if (!cache) {
+    console.log('[Cache] caches.default not available, skipping cache')
+    const data = await fetchFn()
+    return { data, status: 'MISS' }
+  }
+
   const cacheKey = createCacheKey(query, params, keyPrefix)
 
   try {
@@ -133,12 +172,18 @@ export async function cachedFetch<T>(
     const cachedResponse = await cache.match(cacheKey)
 
     if (cachedResponse) {
-      const age = parseInt(cachedResponse.headers.get('age') || '0', 10)
+      const age = getCacheAge(cachedResponse)
       const data = await cachedResponse.json() as T
 
-      // Check if we need to revalidate
-      if (shouldRevalidate(cachedResponse)) {
-        console.log('[Cache] STALE - serving stale, revalidating in background')
+      // Check if fresh
+      if (isFresh(cachedResponse)) {
+        console.log('[Cache] HIT (fresh)', { age })
+        return { data, status: 'HIT', age }
+      }
+
+      // Check if stale but within SWR window
+      if (isStaleButValid(cachedResponse)) {
+        console.log('[Cache] STALE - serving stale, revalidating in background', { age })
 
         // Revalidate in background
         ctx.waitUntil(
@@ -157,12 +202,13 @@ export async function cachedFetch<T>(
         return { data, status: 'STALE', age }
       }
 
-      console.log('[Cache] HIT', { age })
-      return { data, status: 'HIT', age }
+      // Cache expired (past SWR window) - fetch fresh
+      console.log('[Cache] EXPIRED - fetching fresh data', { age })
+    } else {
+      console.log('[Cache] MISS - no cached response found')
     }
 
-    // Cache miss - fetch fresh data
-    console.log('[Cache] MISS - fetching fresh data')
+    // Cache miss or expired - fetch fresh data
     const data = await fetchFn()
 
     // Store in cache (don't await)
