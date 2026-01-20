@@ -6,7 +6,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["SANITY_STUDIO_PROJECT_ID", "SANITY_STUDIO_DATASET", "SANITY_TOKEN"]
+      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_TOKEN"]
     },
     "//#format-and-lint": {},
     "//#format-and-lint:fix": {
@@ -22,7 +22,7 @@
     "typegen": {
       "cache": true,
       "outputs": ["schema.json", "sanity.types.ts"],
-      "env": ["SANITY_STUDIO_DATASET", "SANITY_STUDIO_PROJECT_ID"]
+      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET"]
     },
     "@apps/web#typegen:watch": {
       "outputs": ["schema.json", "sanity.types.ts"],
@@ -33,7 +33,7 @@
       "dependsOn": ["@apps/web#typegen"],
       "outputs": ["dist/**"],
       "cache": true,
-      "env": ["SANITY_STUDIO_PROJECT_ID", "SANITY_STUDIO_DATASET", "SANITY_TOKEN"]
+      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_TOKEN"]
     },
     "@apps/web#dev": {
       "with": ["@apps/web#typegen:watch"],
