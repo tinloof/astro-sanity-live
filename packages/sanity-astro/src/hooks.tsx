@@ -38,7 +38,9 @@ function isVisualEditingEnabled(): boolean {
 
 /**
  * Hook for fetching Sanity data with live updates in visual editing mode.
- * Uses the same query store as useLiveMode for real-time updates.
+ *
+ * In production: Returns initial data directly (no hydration issues)
+ * In visual editing: Uses query store for live updates
  *
  * Usage:
  * ```tsx
@@ -60,12 +62,26 @@ export function useSanityData<T>({
   params = {},
   initial,
 }: UseSanityDataOptions<T>): UseSanityDataResult<T> {
-  // Use the shared query store's useQuery hook
-  // This returns initial data in production, and live data when useLiveMode is active
+  const visualEditing = isVisualEditingEnabled()
+
+  // Only use the query store when visual editing is enabled
+  // This prevents hydration mismatches in production
   const result = useQuery<T>(query, params, {
     initial: initial as QueryResponseInitial<T>,
   })
 
+  // In production (no visual editing), just return initial data
+  // This ensures server and client render the same thing
+  if (!visualEditing) {
+    return {
+      data: initial.data,
+      loading: false,
+      error: null,
+      encodeDataAttribute: undefined,
+    }
+  }
+
+  // In visual editing mode, use live data from query store
   return {
     data: result.data ?? initial.data,
     loading: result.loading ?? false,

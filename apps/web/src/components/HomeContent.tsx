@@ -19,15 +19,11 @@ type HomeContentProps = {
  * from the Presentation tool via useSanityData.
  */
 export default function HomeContent({ query, params, initial }: HomeContentProps) {
-  const { data, loading } = useSanityData<HOME_QUERY_RESULT>({
+  const { data } = useSanityData<HOME_QUERY_RESULT>({
     query,
     params,
     initial,
   })
-
-  if (loading) {
-    return <div>Loading...</div>
-  }
 
   return (
     <div>
