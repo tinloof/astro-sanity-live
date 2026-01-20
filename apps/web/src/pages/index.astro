@@ -1,22 +1,13 @@
 ---
-import { loadQuery } from '@/sanity';
-import { HOME_QUERY } from '@/sanity/queries';
-import type { HOME_QUERY_RESULT } from '@/sanity/types';
-import Layout from '../layouts/layout.astro';
-import HomeContent from '../components/HomeContent';
+import { loadQuery } from "@/sanity";
+import { HOME_QUERY } from "@/sanity/queries";
+import type { HOME_QUERY_RESULT } from "@/sanity/types";
+import Layout from "../layouts/layout.astro";
+import HomeUI from "../components/HomeUI";
 
-// Load data server-side with visual editing support
-const result = await loadQuery<HOME_QUERY_RESULT>(Astro, {
-  query: HOME_QUERY,
-});
+const result = await loadQuery<HOME_QUERY_RESULT>(Astro, { query: HOME_QUERY });
 ---
 
 <Layout>
-  {/* React island with live updates in visual editing mode */}
-  <HomeContent
-    client:load
-    query={result.query}
-    params={result.params}
-    initial={result.initial}
-  />
+  <HomeUI client:visualEditing {...result} />
 </Layout>

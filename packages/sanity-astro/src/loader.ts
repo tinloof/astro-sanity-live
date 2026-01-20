@@ -1,8 +1,36 @@
 /// <reference types="astro/client" />
 
-import { createQueryStore } from '@sanity/react-loader'
+import { createQueryStore, type QueryResponseInitial } from '@sanity/react-loader'
+import type { QueryParams } from '@sanity/client'
+
+// Re-export for use in components
+export type { QueryResponseInitial }
+
+/**
+ * Props type for components using client:visualEditing directive.
+ * Use this as the base props type for your Sanity-connected components.
+ *
+ * @example
+ * ```tsx
+ * import { type SanityProps } from '@tinloof/sanity-astro/loader'
+ * import type { HOME_QUERY_RESULT } from '@/sanity/types'
+ *
+ * export default function HomeUI({ query, params, initial }: SanityProps<HOME_QUERY_RESULT>) {
+ *   const { data } = useQuery(query, params, { initial })
+ *   return <div>{data.title}</div>
+ * }
+ * ```
+ */
+export type SanityProps<T> = {
+  query: string
+  params: QueryParams
+  initial: QueryResponseInitial<T>
+  // Allow extra props from loadQuery result spread (data, sourceMap, perspective, etc.)
+  [key: string]: unknown
+}
 import {
   type ClientConfig,
+  type ContentSourceMap,
   createClient as sanityCreateClient,
   type SanityClient,
   type QueryParams,
@@ -49,10 +77,10 @@ type AstroGlobal = {
   url: URL
   locals?: {
     // Cloudflare adapter puts ctx directly on locals (not nested under runtime)
-    ctx?: ExecutionContext
+    ctx?: { waitUntil: (promise: Promise<unknown>) => void }
     // Some setups may have it nested
     runtime?: {
-      ctx?: ExecutionContext
+      ctx?: { waitUntil: (promise: Promise<unknown>) => void }
     }
   }
 }
@@ -70,16 +98,13 @@ export type LoadQueryOptions = {
 
 export type LoadQueryResult<T> = {
   data: T
-  sourceMap?: unknown
+  sourceMap?: ContentSourceMap
   perspective: 'published' | 'drafts'
-  /** Initial data that can be passed to useSanityData for hydration */
-  initial: {
-    data: T
-    sourceMap: unknown
-  }
-  /** The GROQ query (needed for useSanityData) */
+  /** Initial data for useQuery hydration */
+  initial: QueryResponseInitial<T>
+  /** The GROQ query */
   query: string
-  /** Query params (needed for useSanityData) */
+  /** Query params */
   params: QueryParams
 }
 
@@ -225,17 +250,6 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       ? { ...DEFAULT_CACHE_OPTIONS, ...config?.cache, ...(typeof cacheOption === 'object' ? cacheOption : {}) }
       : undefined
 
-    console.log('[loadQuery] Request:', {
-      visualEditing,
-      hasToken: !!token,
-      perspective,
-      lastLiveEventId,
-      useCdn: !visualEditing,
-      caching: shouldCache ? 'enabled' : 'disabled',
-      hasExecutionContext: !!ctx,
-      query: query.slice(0, 100) + (query.length > 100 ? '...' : ''),
-    })
-
     // Function to fetch from Sanity
     const fetchFromSanity = async () => {
       const response = await activeClient.fetch(
@@ -255,19 +269,17 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
 
     let result: T
     let syncTags: string[] = []
-    let resultSourceMap: unknown
+    let resultSourceMap: ContentSourceMap | undefined
 
     // Use caching for production queries (non-visual-editing)
     if (shouldCache && cacheOptions) {
-      const cacheResult = await cachedFetch<{ result: T; syncTags?: string[]; resultSourceMap?: unknown }>(
+      const cacheResult = await cachedFetch<{ result: T; syncTags?: string[]; resultSourceMap?: ContentSourceMap }>(
         ctx,
         query,
         params,
         fetchFromSanity,
         cacheOptions
       )
-
-      console.log('[loadQuery] Cache status:', cacheResult.status, cacheResult.age ? `(age: ${cacheResult.age}s)` : '')
 
       result = cacheResult.data.result
       syncTags = cacheResult.data.syncTags ?? []
@@ -279,12 +291,6 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       syncTags = response.syncTags ?? []
       resultSourceMap = response.resultSourceMap
     }
-
-    console.log('[loadQuery] Response:', {
-      perspective,
-      syncTagsCount: syncTags.length,
-      hasSourceMap: !!resultSourceMap,
-    })
 
     addTags(syncTags)
 

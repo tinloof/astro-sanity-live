@@ -1,6 +1,11 @@
 import type { AstroIntegration } from 'astro'
+import { fileURLToPath } from 'node:url'
 import { vitePluginSanityClient } from './vite-plugin-sanity-client'
 import { vitePluginSanityStudio } from './vite-plugin-sanity-studio'
+
+// Resolve paths relative to this file
+const resolveRelative = (path: string) =>
+  fileURLToPath(new URL(path, import.meta.url))
 
 export type StegaConfig = {
   enabled?: boolean
@@ -93,8 +98,15 @@ export default function sanityIntegration(config: SanityIntegrationConfig): Astr
   return {
     name: '@tinloof/sanity-astro',
     hooks: {
-      'astro:config:setup': ({ config: astroConfig, updateConfig, injectRoute, logger }) => {
+      'astro:config:setup': ({ config: astroConfig, updateConfig, injectRoute, addClientDirective, logger }) => {
         logger.info('Setting up Sanity integration')
+
+        // Register client:visualEditing directive
+        // Only hydrates components when visual editing mode is enabled
+        addClientDirective({
+          name: 'visualEditing',
+          entrypoint: resolveRelative('./directives/visual-editing.ts'),
+        })
 
         // Update Vite config with our plugins and optimizations
         updateConfig({

@@ -41,3 +41,22 @@ declare module 'sanity:studio' {
    */
   export const studioConfig: Config
 }
+
+/**
+ * Extend Astro's client directive types to include client:visualEditing.
+ * This directive only hydrates components when visual editing mode is enabled.
+ */
+declare namespace astroHTML.JSX {
+  interface AstroClientDirectives {
+    /**
+     * Only hydrate this component when Sanity visual editing mode is enabled.
+     * Checks URL parameter and cookie for the visual editing flag.
+     *
+     * @example
+     * ```astro
+     * <MyComponent client:visualEditing {...result} />
+     * ```
+     */
+    'client:visualEditing'?: boolean
+  }
+}
