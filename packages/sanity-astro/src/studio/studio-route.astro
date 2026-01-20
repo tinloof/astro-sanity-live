@@ -1,0 +1,37 @@
+---
+/**
+ * Sanity Studio route component.
+ *
+ * This route is automatically injected by the @tinloof/sanity-astro integration
+ * when studioBasePath is configured.
+ *
+ * The route is NOT prerendered (SSR mode) to work as a client-side SPA.
+ * The Studio component is rendered client-only with React.
+ */
+import StudioComponent from './studio-component'
+
+// Disable prerendering - Studio needs to run as SPA
+export const prerender = false
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="referrer" content="same-origin" />
+    <meta name="robots" content="noindex" />
+    <title>Sanity Studio</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <StudioComponent client:only="react" />
+  </body>
+</html>

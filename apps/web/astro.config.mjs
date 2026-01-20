@@ -2,13 +2,20 @@
 import { defineConfig, envField } from "astro/config";
 
 import react from "@astrojs/react";
-
 import cloudflare from "@astrojs/cloudflare";
+import sanity from "@tinloof/sanity-astro";
 
 // https://astro.build/config
 export default defineConfig({
   output: "server",
-  integrations: [react()],
+  integrations: [
+    react(),
+    sanity({
+      projectId: import.meta.env.PUBLIC_SANITY_PROJECT_ID || "fl1nk1cy",
+      dataset: import.meta.env.PUBLIC_SANITY_DATASET || "production",
+      studioBasePath: "/cms",
+    }),
+  ],
   adapter: cloudflare(),
   env: {
     schema: {

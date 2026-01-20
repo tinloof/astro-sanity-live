@@ -1,14 +1,13 @@
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [".astro/types.d.ts", "**/*", "../../packages/sanity/sanity.types.ts"],
+  "include": [".astro/types.d.ts", "**/*"],
   "exclude": ["dist"],
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@packages/sanity/queries": ["../../packages/sanity/src/queries/index.ts"],
-      "@packages/sanity/types": ["../../packages/sanity/sanity.types.ts"],
-      "@packages/sanity/*": ["../../packages/sanity/*"]
+      "@/sanity/queries": ["src/sanity/queries/index.ts"],
+      "@/sanity/types": ["sanity.types.ts"]
     }
   }
 }

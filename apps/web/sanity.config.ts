@@ -2,15 +2,13 @@ import { visionTool } from "@sanity/vision";
 import { defineConfig } from "sanity";
 import { structureTool } from "sanity/structure";
 
-import { schemaTypes } from "./src/schema";
-
-console.debug("Sanity Project ID:", process.env["SANITY_STUDIO_PROJECT_ID"]);
+import { schemaTypes } from "./src/sanity/schema";
 
 export default defineConfig({
   name: "default",
   title: "Brandyour CF",
-  projectId: process.env["SANITY_STUDIO_PROJECT_ID"] || "rpxvvkoy",
-  dataset: process.env["SANITY_STUDIO_DATASET"] || "migration",
+  projectId: import.meta.env.SANITY_STUDIO_PROJECT_ID || "fl1nk1cy",
+  dataset: import.meta.env.SANITY_STUDIO_DATASET || "production",
   plugins: [structureTool(), visionTool()],
   schema: {
     types: schemaTypes,
