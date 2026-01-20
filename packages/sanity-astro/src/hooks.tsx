@@ -29,10 +29,20 @@ export type UseSanityDataResult<T> = {
 }
 
 /**
- * Check if visual editing is enabled (client-side)
+ * Check if visual editing is enabled (client-side).
+ * Checks both URL parameter and cookie because third-party cookies
+ * may be blocked when loaded in Sanity's Presentation tool iframe.
  */
 function isVisualEditingEnabled(): boolean {
-  if (typeof document === 'undefined') return false
+  if (typeof window === 'undefined') return false
+
+  // Check URL parameter first (works even when cookies are blocked)
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.has(VISUAL_EDITING_ENABLED)) {
+    return true
+  }
+
+  // Fall back to cookie check
   return document.cookie.includes(`${VISUAL_EDITING_ENABLED}=true`)
 }
 

@@ -37,10 +37,20 @@ export type VisualEditingComponentProps = {
 }
 
 /**
- * Check if visual editing cookie is set (synchronous check)
+ * Check if visual editing is enabled via cookie OR URL parameter.
+ * URL parameter check is needed because third-party cookies may be blocked
+ * when the site is loaded in Sanity's Presentation tool iframe.
  */
-function hasVisualEditingCookie(): boolean {
-  if (typeof document === 'undefined') return false
+function isVisualEditingEnabled(): boolean {
+  if (typeof window === 'undefined') return false
+
+  // Check URL parameter first (works even when cookies are blocked)
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.has(VISUAL_EDITING_ENABLED)) {
+    return true
+  }
+
+  // Fall back to cookie check
   return document.cookie.includes(`${VISUAL_EDITING_ENABLED}=true`)
 }
 
@@ -48,8 +58,8 @@ function hasVisualEditingCookie(): boolean {
  * Get initial visual editing state (for SSR-safe initialization)
  */
 function getInitialVisualEditingState(): boolean {
-  if (typeof document === 'undefined') return false
-  return hasVisualEditingCookie()
+  if (typeof window === 'undefined') return false
+  return isVisualEditingEnabled()
 }
 
 /**
