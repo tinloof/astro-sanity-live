@@ -5,8 +5,12 @@ import { structureTool } from "sanity/structure";
 
 import { schemaTypes } from "./src/sanity/schema";
 
-// Preview URL - use production URL when deployed, localhost for dev
-const previewUrl = process.env.SANITY_STUDIO_PREVIEW_URL || "http://localhost:3000";
+// Detect environment and set preview URL accordingly
+// In production builds, use the production URL
+const isProduction = process.env.NODE_ENV === "production";
+const previewUrl = isProduction
+  ? "https://astro-sanity-live.seif.workers.dev"
+  : "http://localhost:3000";
 
 export default defineConfig({
   name: "default",
