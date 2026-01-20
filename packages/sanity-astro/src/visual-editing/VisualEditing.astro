@@ -1,0 +1,73 @@
+---
+/**
+ * Sanity Visual Editing component for Astro.
+ *
+ * This component enables click-to-edit functionality when viewing
+ * the site with visual editing enabled (via cookie).
+ *
+ * Add this to your layout - it will only activate when the
+ * visual editing cookie is present.
+ *
+ * @example
+ * ```astro
+ * ---
+ * import { VisualEditing } from '@tinloof/sanity-astro/visual-editing'
+ * ---
+ * <!-- With live mode (recommended) - real-time updates without page reload -->
+ * <VisualEditing refresh="live" />
+ *
+ * <!-- With page reload on changes -->
+ * <VisualEditing refresh="reload" />
+ * ```
+ */
+import VisualEditingComponent from './visual-editing-component'
+
+interface Props {
+  /**
+   * The z-index for the visual editing overlays
+   * @default 9999
+   */
+  zIndex?: number
+  /**
+   * The refresh strategy when content changes in the Studio
+   * - 'live': Real-time updates via loaders (no page reload) - RECOMMENDED
+   * - 'reload': Page reload with debouncing
+   * - 'manual': No automatic refresh
+   * @default 'live'
+   */
+  refresh?: 'live' | 'reload' | 'manual'
+  /**
+   * Debounce delay in ms before refreshing after mutations stop (only for 'reload' mode)
+   * @default 500
+   */
+  refreshDebounce?: number
+  /**
+   * The URL to the Sanity Studio (for stega encoding)
+   * @default '/cms'
+   */
+  studioUrl?: string
+}
+
+const {
+  zIndex = 9999,
+  refresh = 'live',
+  refreshDebounce = 500,
+  studioUrl = '/cms',
+} = Astro.props
+
+// Pass config to component for creating browser client
+const config = {
+  projectId: import.meta.env.PUBLIC_SANITY_PROJECT_ID,
+  dataset: import.meta.env.PUBLIC_SANITY_DATASET,
+  apiVersion: import.meta.env.PUBLIC_SANITY_API_VERSION || '2024-01-01',
+  studioUrl,
+}
+---
+
+<VisualEditingComponent
+  client:only="react"
+  zIndex={zIndex}
+  refresh={refresh}
+  refreshDebounce={refreshDebounce}
+  config={config}
+/>

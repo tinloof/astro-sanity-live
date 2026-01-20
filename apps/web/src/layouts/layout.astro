@@ -1,6 +1,7 @@
 ---
 import { ClientRouter } from "astro:transitions";
 import SanityLive from "@tinloof/sanity-astro/SanityLive.astro";
+import { VisualEditing } from "@tinloof/sanity-astro/visual-editing";
 ---
 
 <!doctype html>
@@ -16,6 +17,7 @@ import SanityLive from "@tinloof/sanity-astro/SanityLive.astro";
   <body>
     <slot />
     <SanityLive />
+    <VisualEditing />
   </body>
 </html>
 

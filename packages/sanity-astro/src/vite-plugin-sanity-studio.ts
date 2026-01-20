@@ -1,4 +1,5 @@
-import type { Plugin, ResolvedConfig } from 'vite'
+import type { Plugin, ResolvedConfig, UserConfig } from 'vite'
+import { loadEnv } from 'vite'
 import type { SanityIntegrationConfig } from './integration'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -18,6 +19,24 @@ export function vitePluginSanityStudio(config: SanityIntegrationConfig): Plugin 
 
   return {
     name: 'vite-plugin-sanity-studio',
+    config(_config: UserConfig, { mode }) {
+      // Load env files to get SANITY_STUDIO_* and PUBLIC_SANITY_* vars
+      const env = loadEnv(mode, process.cwd(), ['SANITY_STUDIO_', 'PUBLIC_SANITY_'])
+
+      // Define process.env.SANITY_STUDIO_* for browser environments
+      // This allows sanity.config.ts to use process.env which works in both
+      // Node.js (Sanity CLI) and browser (via Vite replacement)
+      return {
+        define: {
+          'process.env.SANITY_STUDIO_PROJECT_ID': JSON.stringify(
+            env.SANITY_STUDIO_PROJECT_ID || env.PUBLIC_SANITY_PROJECT_ID || ''
+          ),
+          'process.env.SANITY_STUDIO_DATASET': JSON.stringify(
+            env.SANITY_STUDIO_DATASET || env.PUBLIC_SANITY_DATASET || ''
+          ),
+        },
+      }
+    },
     configResolved(resolved) {
       viteConfig = resolved
     },

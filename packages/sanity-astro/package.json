@@ -9,12 +9,17 @@
   "exports": {
     ".": "./src/integration.ts",
     "./init": "./src/init.ts",
+    "./loader": "./src/loader.ts",
+    "./hooks": "./src/hooks.tsx",
     "./SanityLive.astro": "./src/SanityLive.astro",
+    "./visual-editing": "./src/visual-editing/index.ts",
     "./studio-route": "./src/studio/studio-route.astro",
     "./module": "./src/module.d.ts"
   },
   "dependencies": {
     "@sanity/client": "^7.14.0",
+    "@sanity/react-loader": "^2.0.5",
+    "@sanity/visual-editing": "^5.1.0",
     "history": "^5.3.0"
   },
   "peerDependencies": {
@@ -22,7 +27,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "sanity": "^5.0.0",
-    "styled-components": "^6.0.0"
+    "styled-components": "^6.0.0",
+    "vite": "^6.0.0"
   },
   "peerDependenciesMeta": {
     "sanity": {

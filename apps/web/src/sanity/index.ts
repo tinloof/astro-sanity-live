@@ -1,4 +1,7 @@
-import { initSanity } from '@tinloof/sanity-astro/init'
+import { createSanityLoader } from '@tinloof/sanity-astro/loader'
 import '@/sanity/types'
 
-export const { client, config, sanityFetch } = initSanity()
+export const { client, browserClient, config, loadQuery } = createSanityLoader()
+
+// Re-export for backwards compatibility
+export const sanityFetch = loadQuery

@@ -1,15 +1,22 @@
 ---
-import { sanityFetch } from '@/sanity';
+import { loadQuery } from '@/sanity';
 import { HOME_QUERY } from '@/sanity/queries';
 import type { HOME_QUERY_RESULT } from '@/sanity/types';
 import Layout from '../layouts/layout.astro';
+import HomeContent from '../components/HomeContent';
 
-const { data: homeData } = await sanityFetch<HOME_QUERY_RESULT>(Astro, {
+// Load data server-side with visual editing support
+const result = await loadQuery<HOME_QUERY_RESULT>(Astro, {
   query: HOME_QUERY,
 });
 ---
 
 <Layout>
-	<h1>Sanity Data:</h1>
-	<pre>{JSON.stringify(homeData, null, 2)}</pre>
+  {/* React island with live updates in visual editing mode */}
+  <HomeContent
+    client:load
+    query={result.query}
+    params={result.params}
+    initial={result.initial}
+  />
 </Layout>

@@ -6,7 +6,7 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_TOKEN"]
+      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_API_READ_TOKEN"]
     },
     "//#format-and-lint": {},
     "//#format-and-lint:fix": {
@@ -33,7 +33,7 @@
       "dependsOn": ["@apps/web#typegen"],
       "outputs": ["dist/**"],
       "cache": true,
-      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_TOKEN"]
+      "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_API_READ_TOKEN"]
     },
     "@apps/web#dev": {
       "with": ["@apps/web#typegen:watch"],
