@@ -148,6 +148,14 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
   // Token for draft access (server-side only, not PUBLIC_)
   const token = import.meta.env.SANITY_API_READ_TOKEN
 
+  console.log('[Sanity Loader] Config:', {
+    projectId,
+    dataset,
+    apiVersion: apiVersion || DEFAULT_API_VERSION,
+    hasToken: !!token,
+    tokenPreview: token ? `${token.slice(0, 10)}...` : 'NOT SET',
+  })
+
   // Regular client without stega (for production)
   const client = sanityCreateClient({
     ...sanityConfig,
