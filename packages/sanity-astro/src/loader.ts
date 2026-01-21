@@ -208,6 +208,7 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     // Check for lastLiveEventId from cookie (set by SanityLive after content change)
     // This tells Sanity's CDN to return fresh data, bypassing any stale cached content
     const lastLiveEventId = Astro.cookies.get(LAST_LIVE_EVENT_ID_COOKIE)?.value
+    console.log('[Loader] lastLiveEventId from cookie:', lastLiveEventId ? lastLiveEventId.slice(0, 20) + '...' : 'none')
     if (lastLiveEventId) {
       // Clear the event ID cookie after reading (single use)
       Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
@@ -230,6 +231,7 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     // Determine if we should read from cache
     // When we have a lastLiveEventId, we bypass cache read to get fresh data from Sanity
     const shouldCache = !visualEditing && !lastLiveEventId && cacheOption !== false
+    console.log('[Loader] shouldCache:', shouldCache, '| visualEditing:', visualEditing, '| hasEventId:', !!lastLiveEventId)
 
     // Function to fetch from Sanity (returns data and tags for cache)
     const fetchFromSanity = async () => {
