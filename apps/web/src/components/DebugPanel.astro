@@ -3,9 +3,11 @@ interface Props {
   perspective: 'published' | 'drafts';
   cacheStatus?: 'HIT' | 'MISS' | 'STALE' | 'BYPASS';
   cacheAge?: number;
+  tags?: string[];
+  ms?: number;
 }
 
-const { perspective, cacheStatus, cacheAge } = Astro.props;
+const { perspective, cacheStatus, cacheAge, tags, ms } = Astro.props;
 
 const isVisualEditing = Astro.cookies.get('sanity-visual-editing')?.value === 'true';
 
@@ -19,6 +21,17 @@ function getCacheColor(status?: string) {
     default: return 'bg-gray-500/90 text-white';
   }
 }
+
+// Format tags for display (show first few, collapse rest)
+function formatTags(tags?: string[]) {
+  if (!tags || tags.length === 0) return null;
+  const maxDisplay = 3;
+  const displayed = tags.slice(0, maxDisplay);
+  const remaining = tags.length - maxDisplay;
+  return { displayed, remaining: remaining > 0 ? remaining : 0 };
+}
+
+const formattedTags = formatTags(tags);
 ---
 
 <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 text-xs font-mono">
@@ -43,7 +56,39 @@ function getCacheColor(status?: string) {
     <div class={`px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm ${getCacheColor(cacheStatus)}`}>
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-white"></span>
-        <span>Cache: {cacheStatus}{cacheAge !== undefined ? ` (${cacheAge}s)` : ''}</span>
+        <span>Cache: {cacheStatus}{cacheAge !== undefined ? ` (${cacheAge}s old)` : ''}</span>
+      </div>
+    </div>
+  )}
+
+  <!-- Query Time -->
+  {ms !== undefined && (
+    <div class="px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm bg-purple-500/90 text-white">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-white"></span>
+        <span>Query: {ms}ms</span>
+      </div>
+    </div>
+  )}
+
+  <!-- Sync Tags -->
+  {formattedTags && (
+    <div class="px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm bg-indigo-500/90 text-white max-w-xs">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="w-2 h-2 rounded-full bg-white"></span>
+        <span>Tags ({tags?.length})</span>
+      </div>
+      <div class="flex flex-wrap gap-1 ml-4">
+        {formattedTags.displayed.map((tag) => (
+          <span class="bg-white/20 px-1.5 py-0.5 rounded text-[10px] truncate max-w-[120px]" title={tag}>
+            {tag.replace(/^s1:/, '')}
+          </span>
+        ))}
+        {formattedTags.remaining > 0 && (
+          <span class="bg-white/20 px-1.5 py-0.5 rounded text-[10px]">
+            +{formattedTags.remaining} more
+          </span>
+        )}
       </div>
     </div>
   )}

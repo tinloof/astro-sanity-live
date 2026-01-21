@@ -72,6 +72,10 @@ export type LoadQueryResult<T> = {
   cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS'
   /** Cache age in seconds (if cached) */
   cacheAge?: number
+  /** Sanity sync tags for cache invalidation */
+  tags?: string[]
+  /** Query execution time in milliseconds */
+  ms: number
 }
 
 type CreateSanityLoaderReturn = {
@@ -86,10 +90,10 @@ type CreateSanityLoaderReturn = {
   ) => Promise<LoadQueryResult<T>>
 }
 
-// Default cache options
+// Default cache options - with tag-based invalidation, we can cache aggressively
 const DEFAULT_CACHE_OPTIONS: CacheOptions = {
-  maxAge: 10,               // 10 seconds fresh (for testing, increase in production)
-  staleWhileRevalidate: 30, // 30 seconds stale window (for testing, increase in production)
+  maxAge: 60 * 60,              // 1 hour fresh (invalidated by tags when content changes)
+  staleWhileRevalidate: 60 * 60 * 24, // 24 hour stale window (safety net)
   keyPrefix: 'sanity',
 }
 
@@ -167,6 +171,8 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     Astro: AstroGlobal,
     { query, params = {}, cache: cacheOption }: LoadQueryOptions
   ): Promise<LoadQueryResult<T>> {
+    const startTime = performance.now()
+
     const visualEditing = isVisualEditingEnabled(Astro)
     // Only use drafts perspective if we have a token
     const perspective = visualEditing && token ? 'drafts' : 'published'
@@ -204,6 +210,7 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     let result: T
     let cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS' = 'BYPASS'
     let cacheAge: number | undefined
+    let tags: string[] | undefined
 
     // Use caching for production queries (non-visual-editing)
     if (shouldCache && cacheOptions) {
@@ -218,18 +225,24 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       result = cacheResult.data.result
       cacheStatus = cacheResult.status
       cacheAge = cacheResult.age
+      tags = cacheResult.data.syncTags
     } else {
       // Direct fetch for visual editing (no caching)
-      const { data: response } = await fetchFromSanity()
+      const { data: response, tags: responseTags } = await fetchFromSanity()
       result = response.result as T
+      tags = responseTags
       cacheStatus = 'BYPASS'
     }
+
+    const ms = Math.round(performance.now() - startTime)
 
     return {
       data: result,
       perspective,
       cacheStatus,
       cacheAge,
+      tags,
+      ms,
     }
   }
 
