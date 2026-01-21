@@ -174,6 +174,14 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     const startTime = performance.now()
 
     const visualEditing = isVisualEditingEnabled(Astro)
+    // Check if we should bypass Sanity CDN (set after cache purge)
+    const cdnBypass = Astro.cookies.get('sanity-cdn-bypass')?.value === '1'
+    if (cdnBypass) {
+      // Clear the bypass flag after reading
+      Astro.cookies.delete('sanity-cdn-bypass', { path: '/' })
+      console.log('[Loader] CDN bypass active - fetching fresh from Sanity API')
+    }
+
     // Only use drafts perspective if we have a token
     const perspective = visualEditing && token ? 'drafts' : 'published'
     const activeClient = visualEditing ? stegaClient : client
@@ -181,8 +189,8 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     // Get Cloudflare execution context for caching
     const ctx = Astro.locals?.ctx ?? Astro.locals?.runtime?.ctx ?? null
 
-    // Determine cache options - disable for visual editing, use defaults otherwise
-    const shouldCache = !visualEditing && cacheOption !== false
+    // Determine cache options - disable for visual editing or CDN bypass, use defaults otherwise
+    const shouldCache = !visualEditing && !cdnBypass && cacheOption !== false
     const cacheOptions = shouldCache
       ? { ...DEFAULT_CACHE_OPTIONS, ...config?.cache, ...(typeof cacheOption === 'object' ? cacheOption : {}) }
       : undefined
@@ -192,10 +200,10 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       const options = {
         filterResponse: false,
         perspective,
-        useCdn: !visualEditing,
+        useCdn: !visualEditing && !cdnBypass, // Bypass Sanity CDN after cache purge
         resultSourceMap: visualEditing ? 'withKeyArraySelector' : false,
         // cache option is valid but @sanity/client types don't include it in all overloads
-        ...(visualEditing && { cache: 'no-store' }),
+        ...((visualEditing || cdnBypass) && { cache: 'no-store' }),
       }
 
       const response = await activeClient.fetch(query, params, options as Parameters<typeof activeClient.fetch>[2])

@@ -104,6 +104,9 @@ export default function SanityLive({
                 window.clearTimeout(refreshTimeoutRef.current)
               }
 
+              // Set flag to bypass Sanity CDN on next request (CDN may have stale data)
+              document.cookie = 'sanity-cdn-bypass=1; path=/; max-age=10'
+
               // Debounce the refresh
               refreshTimeoutRef.current = window.setTimeout(() => {
                 console.log('[SanityLive] Triggering refresh now')
