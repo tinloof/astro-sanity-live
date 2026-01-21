@@ -4,10 +4,16 @@ import { HOME_QUERY } from "@/sanity/queries";
 import type { HOME_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
 import HomeUI from "../components/HomeUI";
+import DebugPanel from "../components/DebugPanel.astro";
 
 const result = await loadQuery<HOME_QUERY_RESULT>(Astro, { query: HOME_QUERY });
 ---
 
 <Layout>
   <HomeUI client:visualEditing {...result} />
+  <DebugPanel
+    perspective={result.perspective}
+    cacheStatus={result.cacheStatus}
+    cacheAge={result.cacheAge}
+  />
 </Layout>

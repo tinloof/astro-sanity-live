@@ -106,6 +106,10 @@ export type LoadQueryResult<T> = {
   query: string
   /** Query params */
   params: QueryParams
+  /** Cache status - HIT, MISS, STALE, or BYPASS (for visual editing) */
+  cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS'
+  /** Cache age in seconds (if cached) */
+  cacheAge?: number
 }
 
 // Create a singleton query store with SSR mode
@@ -270,6 +274,8 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     let result: T
     let syncTags: string[] = []
     let resultSourceMap: ContentSourceMap | undefined
+    let cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS' = 'BYPASS'
+    let cacheAge: number | undefined
 
     // Use caching for production queries (non-visual-editing)
     if (shouldCache && cacheOptions) {
@@ -284,12 +290,15 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       result = cacheResult.data.result
       syncTags = cacheResult.data.syncTags ?? []
       resultSourceMap = cacheResult.data.resultSourceMap
+      cacheStatus = cacheResult.status
+      cacheAge = cacheResult.age
     } else {
       // Direct fetch for visual editing (no caching)
       const response = await fetchFromSanity()
       result = response.result as T
       syncTags = response.syncTags ?? []
       resultSourceMap = response.resultSourceMap
+      cacheStatus = 'BYPASS'
     }
 
     addTags(syncTags)
@@ -300,6 +309,8 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       perspective,
       query,
       params,
+      cacheStatus,
+      cacheAge,
       // Initial data for useQuery hydration
       initial: {
         data: result,

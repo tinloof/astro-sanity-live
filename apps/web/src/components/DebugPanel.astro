@@ -1,0 +1,50 @@
+---
+interface Props {
+  perspective: 'published' | 'drafts';
+  cacheStatus?: 'HIT' | 'MISS' | 'STALE' | 'BYPASS';
+  cacheAge?: number;
+}
+
+const { perspective, cacheStatus, cacheAge } = Astro.props;
+
+const isVisualEditing = Astro.cookies.get('sanity-visual-editing')?.value === 'true';
+
+// Get cache status color
+function getCacheColor(status?: string) {
+  switch (status) {
+    case 'HIT': return 'bg-emerald-500/90 text-white';
+    case 'STALE': return 'bg-yellow-500/90 text-white';
+    case 'MISS': return 'bg-orange-500/90 text-white';
+    case 'BYPASS': return 'bg-gray-500/90 text-white';
+    default: return 'bg-gray-500/90 text-white';
+  }
+}
+---
+
+<div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 text-xs font-mono">
+  <!-- Visual Editing Status -->
+  <div class={`px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm ${isVisualEditing ? 'bg-green-500/90 text-white' : 'bg-gray-800/90 text-gray-300'}`}>
+    <div class="flex items-center gap-2">
+      <span class={`w-2 h-2 rounded-full ${isVisualEditing ? 'bg-white animate-pulse' : 'bg-gray-500'}`}></span>
+      <span>Visual Editing: {isVisualEditing ? 'ON' : 'OFF'}</span>
+    </div>
+  </div>
+
+  <!-- Perspective -->
+  <div class={`px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm ${perspective === 'drafts' ? 'bg-amber-500/90 text-white' : 'bg-blue-500/90 text-white'}`}>
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-white"></span>
+      <span>Perspective: {perspective}</span>
+    </div>
+  </div>
+
+  <!-- Cache Status -->
+  {cacheStatus && (
+    <div class={`px-3 py-2 rounded-lg shadow-lg backdrop-blur-sm ${getCacheColor(cacheStatus)}`}>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-white"></span>
+        <span>Cache: {cacheStatus}{cacheAge !== undefined ? ` (${cacheAge}s)` : ''}</span>
+      </div>
+    </div>
+  )}
+</div>

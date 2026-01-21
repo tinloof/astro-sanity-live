@@ -4,6 +4,7 @@ import { PAGE_QUERY, ALL_PAGES_QUERY } from "@/sanity/queries";
 import type { PAGE_QUERY_RESULT, ALL_PAGES_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
 import PageUI from "../components/PageUI";
+import DebugPanel from "../components/DebugPanel.astro";
 
 export async function getStaticPaths() {
   const pages = await client.fetch<ALL_PAGES_QUERY_RESULT>(ALL_PAGES_QUERY);
@@ -26,4 +27,9 @@ if (!result.data) {
 
 <Layout>
   <PageUI client:visualEditing {...result} />
+  <DebugPanel
+    perspective={result.perspective}
+    cacheStatus={result.cacheStatus}
+    cacheAge={result.cacheAge}
+  />
 </Layout>
