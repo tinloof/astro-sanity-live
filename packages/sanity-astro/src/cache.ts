@@ -288,7 +288,7 @@ export async function cachedFetch<T>(
     // Cache miss or expired - fetch fresh data
     const { data, tags } = await fetchFn()
 
-    console.log('[Cache] MISS - Storing with tags:', tags?.length ?? 0, tags?.slice(0, 3))
+    console.log('[Cache] MISS - Storing with tags:', tags?.length ?? 0, JSON.stringify(tags?.slice(0, 5)))
 
     // Store in cache (don't await)
     const response = createCacheResponse({ data, tags }, maxAge, staleWhileRevalidate)
@@ -300,7 +300,7 @@ export async function cachedFetch<T>(
         // Update tag index if we have tags
         if (tags?.length) {
           await addToTagIndex(cache, cacheKeyUrl, tags)
-          console.log('[Cache] Added', tags.length, 'tags to index')
+          console.log('[Cache] Added', tags.length, 'tags to index:', JSON.stringify(tags.slice(0, 5)))
         }
       })()
     )
@@ -394,6 +394,10 @@ export async function purgeCacheByTags(
 
   try {
     const index = await getTagIndex(cache)
+    const indexTags = Object.keys(index)
+    console.log('[Cache] Purge requested for tags:', JSON.stringify(tags.slice(0, 5)))
+    console.log('[Cache] Tag index has', indexTags.length, 'tags:', JSON.stringify(indexTags.slice(0, 10)))
+
     const purgedKeys = new Set<string>()
     const purgedTags: string[] = []
 

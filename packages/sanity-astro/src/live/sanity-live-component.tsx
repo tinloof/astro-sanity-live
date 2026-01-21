@@ -93,7 +93,7 @@ export default function SanityLive({
         if (event.type === 'message' && event.tags && event.tags.length > 0) {
           // Extract event ID - this tells Sanity's CDN to return fresh data
           const eventId = event.id
-          console.log('[SanityLive] Received event with tags:', event.tags.length, 'eventId:', eventId ? eventId.slice(0, 20) + '...' : 'none')
+          console.log('[SanityLive] Received event with tags:', event.tags.length, JSON.stringify(event.tags.slice(0, 5)), 'eventId:', eventId ? eventId.slice(0, 20) + '...' : 'none')
 
           try {
             // Call purge API with tags and event ID
