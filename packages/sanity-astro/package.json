@@ -11,6 +11,7 @@
     "./loader": "./src/loader.ts",
     "./visual-editing": "./src/visual-editing/index.ts",
     "./live": "./src/live/index.ts",
+    "./cache": "./src/cache.ts",
     "./studio-route": "./src/studio/studio-route.astro",
     "./module": "./src/module.d.ts"
   },

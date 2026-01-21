@@ -283,15 +283,19 @@ export async function cachedFetch<T>(
     // Cache miss or expired - fetch fresh data
     const { data, tags } = await fetchFn()
 
+    console.log('[Cache] MISS - Storing with tags:', tags?.length ?? 0, tags?.slice(0, 3))
+
     // Store in cache (don't await)
     const response = createCacheResponse({ data, tags }, maxAge, staleWhileRevalidate)
     ctx.waitUntil(
       (async () => {
         await cache.put(cacheKey, response)
+        console.log('[Cache] Stored cache entry at:', cacheKeyUrl)
 
         // Update tag index if we have tags
         if (tags?.length) {
           await addToTagIndex(cache, cacheKeyUrl, tags)
+          console.log('[Cache] Added', tags.length, 'tags to index')
         }
       })()
     )
@@ -325,6 +329,41 @@ function createCacheResponse<T>(
       'x-cache-time': new Date().toISOString(),
     },
   })
+}
+
+/**
+ * Get debug info about the cache state.
+ * Useful for debugging cache invalidation issues.
+ */
+export async function getCacheDebugInfo(): Promise<{
+  available: boolean
+  tagIndex: Record<string, string[]>
+  tagCount: number
+  keyCount: number
+}> {
+  if (typeof caches === 'undefined') {
+    return { available: false, tagIndex: {}, tagCount: 0, keyCount: 0 }
+  }
+
+  const cache = caches.default
+  if (!cache) {
+    return { available: false, tagIndex: {}, tagCount: 0, keyCount: 0 }
+  }
+
+  const tagIndex = await getTagIndex(cache)
+  const allKeys = new Set<string>()
+  for (const keys of Object.values(tagIndex)) {
+    for (const key of keys) {
+      allKeys.add(key)
+    }
+  }
+
+  return {
+    available: true,
+    tagIndex,
+    tagCount: Object.keys(tagIndex).length,
+    keyCount: allKeys.size,
+  }
 }
 
 /**

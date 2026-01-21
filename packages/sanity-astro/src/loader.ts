@@ -226,6 +226,9 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       cacheStatus = cacheResult.status
       cacheAge = cacheResult.age
       tags = cacheResult.data.syncTags
+
+      // Debug logging
+      console.log('[Loader] Cache status:', cacheStatus, 'Tags from response:', tags?.length ?? 0)
     } else {
       // Direct fetch for visual editing (no caching)
       const { data: response, tags: responseTags } = await fetchFromSanity()
