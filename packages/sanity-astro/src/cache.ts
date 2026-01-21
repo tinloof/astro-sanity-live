@@ -33,9 +33,9 @@ export type CacheOptions = {
 }
 
 /**
- * Internal type for cache entries with tags
+ * Cache entry with data and tags
  */
-type CacheEntry<T> = {
+export type CacheEntry<T> = {
   data: T
   tags?: string[]
 }
@@ -83,7 +83,7 @@ function parseCacheControl(header: string | null): Record<string, number | boole
 /**
  * Create a cache key from query and params
  */
-function createCacheKey(
+export function createCacheKey(
   query: string,
   params: Record<string, unknown>,
   prefix: string
@@ -167,7 +167,7 @@ async function updateTagIndex(cache: Cache, index: TagIndex): Promise<void> {
 /**
  * Add cache key to tag index
  */
-async function addToTagIndex(
+export async function addToTagIndex(
   cache: Cache,
   cacheKeyUrl: string,
   tags: string[]
@@ -311,7 +311,7 @@ export async function cachedFetch<T>(
 /**
  * Create a cacheable response with proper headers
  */
-function createCacheResponse<T>(
+export function createCacheResponse<T>(
   entry: CacheEntry<T>,
   maxAge: number,
   staleWhileRevalidate: number

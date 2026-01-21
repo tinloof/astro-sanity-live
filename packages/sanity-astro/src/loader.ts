@@ -7,7 +7,7 @@ import {
   type QueryParams,
 } from '@sanity/client'
 import { VISUAL_EDITING_ENABLED, DEFAULT_API_VERSION, LAST_LIVE_EVENT_ID_COOKIE } from './constants'
-import { cachedFetch, type CacheOptions } from './cache'
+import { cachedFetch, createCacheKey, createCacheResponse, addToTagIndex, type CacheOptions } from './cache'
 
 export type StegaConfig = {
   /**
@@ -192,12 +192,16 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     // Get Cloudflare execution context for caching
     const ctx = Astro.locals?.ctx ?? Astro.locals?.runtime?.ctx ?? null
 
-    // Determine cache options - disable for visual editing or when using event ID, use defaults otherwise
-    // When we have a lastLiveEventId, we bypass our cache to get fresh data from Sanity
+    // Merge cache options (used for both caching and re-caching after eventId fetch)
+    const mergedCacheOptions = {
+      ...DEFAULT_CACHE_OPTIONS,
+      ...config?.cache,
+      ...(typeof cacheOption === 'object' ? cacheOption : {}),
+    }
+
+    // Determine if we should read from cache
+    // When we have a lastLiveEventId, we bypass cache read to get fresh data from Sanity
     const shouldCache = !visualEditing && !lastLiveEventId && cacheOption !== false
-    const cacheOptions = shouldCache
-      ? { ...DEFAULT_CACHE_OPTIONS, ...config?.cache, ...(typeof cacheOption === 'object' ? cacheOption : {}) }
-      : undefined
 
     // Function to fetch from Sanity (returns data and tags for cache)
     const fetchFromSanity = async () => {
@@ -227,13 +231,13 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     let tags: string[] | undefined
 
     // Use caching for production queries (non-visual-editing)
-    if (shouldCache && cacheOptions) {
+    if (shouldCache) {
       const cacheResult = await cachedFetch<{ result: T; syncTags?: string[] }>(
         ctx,
         query,
         params,
         fetchFromSanity,
-        cacheOptions
+        mergedCacheOptions
       )
 
       result = cacheResult.data.result
@@ -244,11 +248,36 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       // Debug logging
       console.log('[Loader] Cache status:', cacheStatus, 'Tags from response:', tags?.length ?? 0)
     } else {
-      // Direct fetch for visual editing (no caching)
+      // Direct fetch - bypassing cache read but still update cache with fresh data
       const { data: response, tags: responseTags } = await fetchFromSanity()
       result = response.result as T
       tags = responseTags
       cacheStatus = 'BYPASS'
+
+      // Re-populate cache with fresh data and tags (critical for tag index!)
+      // This ensures subsequent live events will match the updated syncTags
+      if (!visualEditing && ctx && typeof caches !== 'undefined') {
+        const cache = caches.default
+        if (cache) {
+          const cacheKey = createCacheKey(query, params, mergedCacheOptions.keyPrefix ?? 'sanity')
+
+          ctx.waitUntil(
+            (async () => {
+              const cacheResponse = createCacheResponse(
+                { data: response, tags: responseTags },
+                mergedCacheOptions.maxAge ?? 60,
+                mergedCacheOptions.staleWhileRevalidate ?? 3600
+              )
+              await cache.put(cacheKey, cacheResponse)
+
+              if (responseTags?.length) {
+                await addToTagIndex(cache, cacheKey.url, responseTags)
+                console.log('[Loader] Re-cached with', responseTags.length, 'fresh tags after eventId fetch')
+              }
+            })()
+          )
+        }
+      }
     }
 
     const ms = Math.round(performance.now() - startTime)
