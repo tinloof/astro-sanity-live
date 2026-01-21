@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import { createClient } from '@sanity/client'
 import type { PurgeResponse } from './purge-handler'
 
+// Cookie name must match the constant in constants.ts
+const LAST_LIVE_EVENT_ID_COOKIE = 'sanity-live-event-id'
+
 export type SanityLiveProps = {
   /**
    * Sanity project ID
@@ -79,13 +82,16 @@ export default function SanityLive({
 
         // Only handle events that have tags
         if (event.type === 'message' && event.tags && event.tags.length > 0) {
-          console.log('[SanityLive] Received event with tags:', event.tags.length)
+          // Extract event ID - this tells Sanity's CDN to return fresh data
+          const eventId = event.id
+          console.log('[SanityLive] Received event with tags:', event.tags.length, 'eventId:', eventId ? eventId.slice(0, 20) + '...' : 'none')
+
           try {
-            // Call purge API
+            // Call purge API with tags and event ID
             const response = await fetch(purgeEndpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tags: event.tags }),
+              body: JSON.stringify({ tags: event.tags, eventId }),
             })
 
             if (!response.ok) {
@@ -104,8 +110,11 @@ export default function SanityLive({
                 window.clearTimeout(refreshTimeoutRef.current)
               }
 
-              // Set flag to bypass Sanity CDN on next request (CDN may have stale data)
-              document.cookie = 'sanity-cdn-bypass=1; path=/; max-age=10'
+              // Store the event ID in a cookie - this will be passed to Sanity's CDN
+              // on the next request to ensure we get fresh data
+              if (eventId) {
+                document.cookie = `${LAST_LIVE_EVENT_ID_COOKIE}=${encodeURIComponent(eventId)}; path=/; max-age=60`
+              }
 
               // Debounce the refresh
               refreshTimeoutRef.current = window.setTimeout(() => {

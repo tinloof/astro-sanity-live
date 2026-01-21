@@ -5,6 +5,8 @@ import { purgeCacheByTags } from '../cache'
  */
 export type PurgeRequest = {
   tags: string[]
+  /** Event ID from Sanity live event - used to get fresh data from CDN */
+  eventId?: string
 }
 
 /**
@@ -14,6 +16,8 @@ export type PurgeResponse = {
   success: boolean
   purgedKeys: string[]
   purgedTags: string[]
+  /** Event ID echoed back for client to use */
+  eventId?: string
   error?: string
 }
 
@@ -52,7 +56,13 @@ export function createPurgeHandler() {
 
       const { purgedKeys, purgedTags } = await purgeCacheByTags(body.tags)
 
-      return jsonResponse({ success: true, purgedKeys, purgedTags }, 200)
+      // Echo back the event ID so client can use it for next request
+      return jsonResponse({
+        success: true,
+        purgedKeys,
+        purgedTags,
+        eventId: body.eventId,
+      }, 200)
     } catch (err) {
       return jsonResponse(
         {

@@ -17,7 +17,7 @@ declare global {
 export type CacheOptions = {
   /**
    * How long the response is considered fresh (in seconds)
-   * @default 300 (5 minutes)
+   * @default 60 (1 minute)
    */
   maxAge?: number
   /**
@@ -214,8 +214,8 @@ export async function cachedFetch<T>(
   options: CacheOptions = {}
 ): Promise<CacheResult<T>> {
   const {
-    maxAge = 300,
-    staleWhileRevalidate = 3600,
+    maxAge = 60,             // 1 minute fresh (tag invalidation handles updates)
+    staleWhileRevalidate = 3600,  // 1 hour stale window (safety net)
     keyPrefix = 'sanity',
   } = options
 

@@ -6,7 +6,7 @@ import {
   type SanityClient,
   type QueryParams,
 } from '@sanity/client'
-import { VISUAL_EDITING_ENABLED, DEFAULT_API_VERSION } from './constants'
+import { VISUAL_EDITING_ENABLED, DEFAULT_API_VERSION, LAST_LIVE_EVENT_ID_COOKIE } from './constants'
 import { cachedFetch, type CacheOptions } from './cache'
 
 export type StegaConfig = {
@@ -41,7 +41,8 @@ export type SanityConfig = {
 type AstroGlobal = {
   cookies: {
     get: (name: string) => { value: string } | undefined
-    set: (name: string, value: string, options?: { path?: string }) => void
+    set: (name: string, value: string, options?: { path?: string; maxAge?: number }) => void
+    delete: (name: string, options?: { path?: string }) => void
   }
   url: URL
   locals?: {
@@ -60,7 +61,7 @@ export type LoadQueryOptions = {
   /**
    * Cache options for this query.
    * Set to `false` to disable caching.
-   * @default { maxAge: 10, staleWhileRevalidate: 30 }
+   * @default { maxAge: 60, staleWhileRevalidate: 3600 }
    */
   cache?: CacheOptions | false
 }
@@ -92,8 +93,8 @@ type CreateSanityLoaderReturn = {
 
 // Default cache options - with tag-based invalidation, we can cache aggressively
 const DEFAULT_CACHE_OPTIONS: CacheOptions = {
-  maxAge: 60 * 60,              // 1 hour fresh (invalidated by tags when content changes)
-  staleWhileRevalidate: 60 * 60 * 24, // 24 hour stale window (safety net)
+  maxAge: 60,                        // 1 minute fresh (tag invalidation handles updates)
+  staleWhileRevalidate: 60 * 60,     // 1 hour stale window (safety net)
   keyPrefix: 'sanity',
 }
 
@@ -174,12 +175,14 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     const startTime = performance.now()
 
     const visualEditing = isVisualEditingEnabled(Astro)
-    // Check if we should bypass Sanity CDN (set after cache purge)
-    const cdnBypass = Astro.cookies.get('sanity-cdn-bypass')?.value === '1'
-    if (cdnBypass) {
-      // Clear the bypass flag after reading
-      Astro.cookies.delete('sanity-cdn-bypass', { path: '/' })
-      console.log('[Loader] CDN bypass active - fetching fresh from Sanity API')
+
+    // Check for lastLiveEventId from cookie (set by SanityLive after content change)
+    // This tells Sanity's CDN to return fresh data, bypassing any stale cached content
+    const lastLiveEventId = Astro.cookies.get(LAST_LIVE_EVENT_ID_COOKIE)?.value
+    if (lastLiveEventId) {
+      // Clear the event ID cookie after reading (single use)
+      Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
+      console.log('[Loader] Using lastLiveEventId for fresh fetch:', lastLiveEventId.slice(0, 16) + '...')
     }
 
     // Only use drafts perspective if we have a token
@@ -189,8 +192,9 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     // Get Cloudflare execution context for caching
     const ctx = Astro.locals?.ctx ?? Astro.locals?.runtime?.ctx ?? null
 
-    // Determine cache options - disable for visual editing or CDN bypass, use defaults otherwise
-    const shouldCache = !visualEditing && !cdnBypass && cacheOption !== false
+    // Determine cache options - disable for visual editing or when using event ID, use defaults otherwise
+    // When we have a lastLiveEventId, we bypass our cache to get fresh data from Sanity
+    const shouldCache = !visualEditing && !lastLiveEventId && cacheOption !== false
     const cacheOptions = shouldCache
       ? { ...DEFAULT_CACHE_OPTIONS, ...config?.cache, ...(typeof cacheOption === 'object' ? cacheOption : {}) }
       : undefined
@@ -200,10 +204,12 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       const options = {
         filterResponse: false,
         perspective,
-        useCdn: !visualEditing && !cdnBypass, // Bypass Sanity CDN after cache purge
+        useCdn: !visualEditing, // Always use CDN for published content (event ID handles freshness)
         resultSourceMap: visualEditing ? 'withKeyArraySelector' : false,
-        // cache option is valid but @sanity/client types don't include it in all overloads
-        ...((visualEditing || cdnBypass) && { cache: 'no-store' }),
+        // Pass lastLiveEventId to Sanity to get fresh data from CDN
+        ...(lastLiveEventId && { lastLiveEventId }),
+        // Disable browser cache for visual editing
+        ...(visualEditing && { cache: 'no-store' }),
       }
 
       const response = await activeClient.fetch(query, params, options as Parameters<typeof activeClient.fetch>[2])
