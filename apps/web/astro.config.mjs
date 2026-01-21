@@ -13,9 +13,7 @@ export default defineConfig({
 
   integrations: [
     react(),
-    sanity({
-      studioBasePath: "/cms",
-    }),
+    sanity(),  // Studio at /cms, live features enabled by default
   ],
 
   adapter: cloudflare(),

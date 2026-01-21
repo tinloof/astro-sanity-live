@@ -3,7 +3,7 @@ import { loadQuery } from "@/sanity";
 import { HOME_QUERY } from "@/sanity/queries";
 import type { HOME_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
-import DebugPanel from "../components/DebugPanel.astro";
+import { DebugPanel } from "@tinloof/sanity-astro/debug";
 
 const result = await loadQuery<HOME_QUERY_RESULT>(Astro, { query: HOME_QUERY });
 const { data } = result;

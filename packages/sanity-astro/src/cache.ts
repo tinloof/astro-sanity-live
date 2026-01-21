@@ -5,7 +5,12 @@
  * Based on: https://gist.github.com/richardscarrott/0d54f2252d434ce90d6f743192fe4d91
  */
 
-import { CACHE_INTERNAL_URL } from './constants'
+import {
+  CACHE_INTERNAL_URL,
+  DEFAULT_CACHE_MAX_AGE,
+  DEFAULT_CACHE_SWR,
+  DEFAULT_CACHE_KEY_PREFIX,
+} from './constants'
 
 // Cloudflare Workers extends CacheStorage with a default property
 declare global {
@@ -17,12 +22,12 @@ declare global {
 export type CacheOptions = {
   /**
    * How long the response is considered fresh (in seconds)
-   * @default 60 (1 minute)
+   * @default 86400 (1 day)
    */
   maxAge?: number
   /**
    * How long stale content can be served while revalidating (in seconds)
-   * @default 3600 (1 hour)
+   * @default 604800 (1 week)
    */
   staleWhileRevalidate?: number
   /**
@@ -214,9 +219,9 @@ export async function cachedFetch<T>(
   options: CacheOptions = {}
 ): Promise<CacheResult<T>> {
   const {
-    maxAge = 60,             // 1 minute fresh (tag invalidation handles updates)
-    staleWhileRevalidate = 3600,  // 1 hour stale window (safety net)
-    keyPrefix = 'sanity',
+    maxAge = DEFAULT_CACHE_MAX_AGE,
+    staleWhileRevalidate = DEFAULT_CACHE_SWR,
+    keyPrefix = DEFAULT_CACHE_KEY_PREFIX,
   } = options
 
   // If no execution context (e.g., dev mode), skip caching

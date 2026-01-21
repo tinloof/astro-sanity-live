@@ -6,7 +6,14 @@ import {
   type SanityClient,
   type QueryParams,
 } from '@sanity/client'
-import { VISUAL_EDITING_ENABLED, DEFAULT_API_VERSION, LAST_LIVE_EVENT_ID_COOKIE } from './constants'
+import {
+  VISUAL_EDITING_ENABLED,
+  DEFAULT_API_VERSION,
+  LAST_LIVE_EVENT_ID_COOKIE,
+  DEFAULT_CACHE_MAX_AGE,
+  DEFAULT_CACHE_SWR,
+  DEFAULT_CACHE_KEY_PREFIX,
+} from './constants'
 import { cachedFetch, createCacheKey, createCacheResponse, addToTagIndex, type CacheOptions } from './cache'
 
 export type StegaConfig = {
@@ -61,7 +68,7 @@ export type LoadQueryOptions = {
   /**
    * Cache options for this query.
    * Set to `false` to disable caching.
-   * @default { maxAge: 60, staleWhileRevalidate: 3600 }
+   * @default { maxAge: 86400, staleWhileRevalidate: 604800 }
    */
   cache?: CacheOptions | false
 }
@@ -91,11 +98,11 @@ type CreateSanityLoaderReturn = {
   ) => Promise<LoadQueryResult<T>>
 }
 
-// Default cache options - with tag-based invalidation, we can cache aggressively
+// Default cache options - uses constants, can be overridden per-query
 const DEFAULT_CACHE_OPTIONS: CacheOptions = {
-  maxAge: 60,                        // 1 minute fresh (tag invalidation handles updates)
-  staleWhileRevalidate: 60 * 60,     // 1 hour stale window (safety net)
-  keyPrefix: 'sanity',
+  maxAge: DEFAULT_CACHE_MAX_AGE,
+  staleWhileRevalidate: DEFAULT_CACHE_SWR,
+  keyPrefix: DEFAULT_CACHE_KEY_PREFIX,
 }
 
 /**
@@ -152,6 +159,35 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
   })
 
   /**
+   * Write data to cache with tags for invalidation.
+   */
+  async function writeToCache(
+    query: string,
+    params: QueryParams,
+    data: unknown,
+    tags: string[] | undefined,
+    options: CacheOptions
+  ): Promise<void> {
+    if (typeof caches === 'undefined') return
+
+    const cache = caches.default
+    if (!cache) return
+
+    const cacheKey = createCacheKey(query, params, options.keyPrefix ?? DEFAULT_CACHE_KEY_PREFIX)
+    const cacheResponse = createCacheResponse(
+      { data, tags },
+      options.maxAge ?? DEFAULT_CACHE_MAX_AGE,
+      options.staleWhileRevalidate ?? DEFAULT_CACHE_SWR
+    )
+
+    await cache.put(cacheKey, cacheResponse)
+
+    if (tags?.length) {
+      await addToTagIndex(cache, cacheKey.url, tags)
+    }
+  }
+
+  /**
    * Check if visual editing is enabled for this request.
    * Also handles enabling visual editing via URL parameter.
    */
@@ -182,7 +218,6 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     if (lastLiveEventId) {
       // Clear the event ID cookie after reading (single use)
       Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
-      console.log('[Loader] Using lastLiveEventId for fresh fetch:', lastLiveEventId.slice(0, 16) + '...')
     }
 
     // Only use drafts perspective if we have a token
@@ -230,54 +265,40 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     let cacheAge: number | undefined
     let tags: string[] | undefined
 
-    // Use caching for production queries (non-visual-editing)
-    if (shouldCache) {
-      const cacheResult = await cachedFetch<{ result: T; syncTags?: string[] }>(
-        ctx,
-        query,
-        params,
-        fetchFromSanity,
-        mergedCacheOptions
-      )
+    try {
+      // Use caching for production queries (non-visual-editing)
+      if (shouldCache) {
+        const cacheResult = await cachedFetch<{ result: T; syncTags?: string[] }>(
+          ctx,
+          query,
+          params,
+          fetchFromSanity,
+          mergedCacheOptions
+        )
 
-      result = cacheResult.data.result
-      cacheStatus = cacheResult.status
-      cacheAge = cacheResult.age
-      tags = cacheResult.data.syncTags
+        result = cacheResult.data.result
+        cacheStatus = cacheResult.status
+        cacheAge = cacheResult.age
+        tags = cacheResult.data.syncTags
+      } else {
+        // Direct fetch - bypassing cache read but still update cache with fresh data
+        const { data: response, tags: responseTags } = await fetchFromSanity()
+        result = response.result as T
+        tags = responseTags
+        cacheStatus = 'BYPASS'
 
-      // Debug logging
-      console.log('[Loader] Cache status:', cacheStatus, 'Tags from response:', tags?.length ?? 0)
-    } else {
-      // Direct fetch - bypassing cache read but still update cache with fresh data
-      const { data: response, tags: responseTags } = await fetchFromSanity()
-      result = response.result as T
-      tags = responseTags
-      cacheStatus = 'BYPASS'
-
-      // Re-populate cache with fresh data and tags (critical for tag index!)
-      // This ensures subsequent live events will match the updated syncTags
-      if (!visualEditing && ctx && typeof caches !== 'undefined') {
-        const cache = caches.default
-        if (cache) {
-          const cacheKey = createCacheKey(query, params, mergedCacheOptions.keyPrefix ?? 'sanity')
-
+        // Re-populate cache with fresh data and tags (critical for tag index!)
+        // This ensures subsequent live events will match the updated syncTags
+        if (!visualEditing && ctx && typeof caches !== 'undefined') {
           ctx.waitUntil(
-            (async () => {
-              const cacheResponse = createCacheResponse(
-                { data: response, tags: responseTags },
-                mergedCacheOptions.maxAge ?? 60,
-                mergedCacheOptions.staleWhileRevalidate ?? 3600
-              )
-              await cache.put(cacheKey, cacheResponse)
-
-              if (responseTags?.length) {
-                await addToTagIndex(cache, cacheKey.url, responseTags)
-                console.log('[Loader] Re-cached with', responseTags.length, 'fresh tags after eventId fetch')
-              }
-            })()
+            writeToCache(query, params, response, responseTags, mergedCacheOptions)
           )
         }
       }
+    } catch (error) {
+      // If fetch fails, throw with more context
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      throw new Error(`[Sanity Loader] Failed to fetch: ${message}`)
     }
 
     const ms = Math.round(performance.now() - startTime)

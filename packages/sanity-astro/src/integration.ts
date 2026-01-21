@@ -1,12 +1,20 @@
 import type { AstroIntegration } from 'astro'
 import { vitePluginSanityStudio } from './vite-plugin-sanity-studio'
+import { DEFAULT_PURGE_ENDPOINT } from './constants'
 
 export type SanityIntegrationConfig = {
   /**
-   * Base path for Sanity Studio (e.g., '/studio' or '/cms')
-   * If provided, studio routes will be injected automatically.
+   * Base path for Sanity Studio.
+   * Set to `false` to disable Studio injection.
+   * @default '/cms'
    */
-  studioBasePath?: string
+  studioBasePath?: string | false
+  /**
+   * Enable live content features (real-time cache invalidation).
+   * When true, injects the purge API route at /api/sanity/purge.
+   * @default true
+   */
+  live?: boolean
 }
 
 /**
@@ -29,14 +37,14 @@ export type SanityIntegrationConfig = {
  *
  * export default defineConfig({
  *   integrations: [
- *     sanity({ studioBasePath: '/cms' }),
- *     // or just: sanity()
+ *     sanity(),  // Studio at /cms, live features enabled
  *   ],
  * })
  * ```
  */
 export default function sanityIntegration(config: SanityIntegrationConfig = {}): AstroIntegration {
-  let studioBasePath = config.studioBasePath
+  // Default to /cms, allow false to disable
+  let studioBasePath: string | false = config.studioBasePath ?? '/cms'
 
   if (studioBasePath) {
     // Ensure studioBasePath is relative
@@ -92,6 +100,20 @@ export default function sanityIntegration(config: SanityIntegrationConfig = {}):
           injectRoute({
             pattern: studioRoutePath,
             entrypoint: '@tinloof/sanity-astro/studio-route',
+            prerender: false,
+          })
+        }
+
+        // Inject purge route for live content invalidation (enabled by default)
+        const enableLive = config.live !== false
+        if (enableLive) {
+          const purgeRoutePath = DEFAULT_PURGE_ENDPOINT.replace(/^\//, '')
+
+          logger.info(`Injecting purge route at ${DEFAULT_PURGE_ENDPOINT}`)
+
+          injectRoute({
+            pattern: purgeRoutePath,
+            entrypoint: '@tinloof/sanity-astro/purge-route',
             prerender: false,
           })
         }

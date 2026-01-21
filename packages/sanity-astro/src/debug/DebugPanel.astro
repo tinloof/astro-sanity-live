@@ -1,37 +1,52 @@
 ---
+/**
+ * Debug panel component for displaying cache and query information.
+ *
+ * Shows visual editing status, perspective, cache status, query time, and sync tags.
+ * Position is fixed to bottom-right corner.
+ *
+ * @example
+ * ```astro
+ * ---
+ * import { DebugPanel } from '@tinloof/sanity-astro/debug'
+ * const result = await loadQuery(Astro, { query })
+ * ---
+ * <DebugPanel {...result} />
+ * ```
+ */
+import { VISUAL_EDITING_ENABLED } from '../constants'
+
 interface Props {
-  perspective: 'published' | 'drafts';
-  cacheStatus?: 'HIT' | 'MISS' | 'STALE' | 'BYPASS';
-  cacheAge?: number;
-  tags?: string[];
-  ms?: number;
+  perspective: 'published' | 'drafts'
+  cacheStatus?: 'HIT' | 'MISS' | 'STALE' | 'BYPASS'
+  cacheAge?: number
+  tags?: string[]
+  ms?: number
 }
 
-const { perspective, cacheStatus, cacheAge, tags, ms } = Astro.props;
+const { perspective, cacheStatus, cacheAge, tags, ms } = Astro.props
 
-const isVisualEditing = Astro.cookies.get('sanity-visual-editing')?.value === 'true';
+const isVisualEditing = Astro.cookies.get(VISUAL_EDITING_ENABLED)?.value === 'true'
 
-// Get cache status color
 function getCacheColor(status?: string) {
   switch (status) {
-    case 'HIT': return 'bg-emerald-500/90 text-white';
-    case 'STALE': return 'bg-yellow-500/90 text-white';
-    case 'MISS': return 'bg-orange-500/90 text-white';
-    case 'BYPASS': return 'bg-gray-500/90 text-white';
-    default: return 'bg-gray-500/90 text-white';
+    case 'HIT': return 'bg-emerald-500/90 text-white'
+    case 'STALE': return 'bg-yellow-500/90 text-white'
+    case 'MISS': return 'bg-orange-500/90 text-white'
+    case 'BYPASS': return 'bg-gray-500/90 text-white'
+    default: return 'bg-gray-500/90 text-white'
   }
 }
 
-// Format tags for display (show first few, collapse rest)
 function formatTags(tags?: string[]) {
-  if (!tags || tags.length === 0) return null;
-  const maxDisplay = 3;
-  const displayed = tags.slice(0, maxDisplay);
-  const remaining = tags.length - maxDisplay;
-  return { displayed, remaining: remaining > 0 ? remaining : 0 };
+  if (!tags || tags.length === 0) return null
+  const maxDisplay = 3
+  const displayed = tags.slice(0, maxDisplay)
+  const remaining = tags.length - maxDisplay
+  return { displayed, remaining: remaining > 0 ? remaining : 0 }
 }
 
-const formattedTags = formatTags(tags);
+const formattedTags = formatTags(tags)
 ---
 
 <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 text-xs font-mono">

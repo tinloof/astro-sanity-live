@@ -3,7 +3,7 @@ import { loadQuery, client } from "@/sanity";
 import { PAGE_QUERY, ALL_PAGES_QUERY } from "@/sanity/queries";
 import type { PAGE_QUERY_RESULT, ALL_PAGES_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
-import DebugPanel from "../components/DebugPanel.astro";
+import { DebugPanel } from "@tinloof/sanity-astro/debug";
 import { PortableText } from "@portabletext/react";
 
 export async function getStaticPaths() {

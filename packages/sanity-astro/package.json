@@ -12,7 +12,9 @@
     "./visual-editing": "./src/visual-editing/index.ts",
     "./live": "./src/live/index.ts",
     "./cache": "./src/cache.ts",
+    "./debug": "./src/debug/index.ts",
     "./studio-route": "./src/studio/studio-route.astro",
+    "./purge-route": "./src/live/purge-route.ts",
     "./module": "./src/module.d.ts"
   },
   "dependencies": {
