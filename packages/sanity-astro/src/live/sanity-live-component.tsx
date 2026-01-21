@@ -73,11 +73,13 @@ export default function SanityLive({
       next: async (event) => {
         // Skip events that arrive too soon after mount (initial sync)
         if (Date.now() - mountTimeRef.current < MOUNT_GRACE_PERIOD) {
+          console.log('[SanityLive] Skipping event (grace period)')
           return
         }
 
         // Only handle events that have tags
         if (event.type === 'message' && event.tags && event.tags.length > 0) {
+          console.log('[SanityLive] Received event with tags:', event.tags.length)
           try {
             // Call purge API
             const response = await fetch(purgeEndpoint, {
@@ -87,13 +89,16 @@ export default function SanityLive({
             })
 
             if (!response.ok) {
+              console.log('[SanityLive] Purge request failed:', response.status)
               return
             }
 
             const result = await response.json() as PurgeResponse
+            console.log('[SanityLive] Purge result:', result.purgedKeys?.length, 'keys purged')
 
             // Refresh the page if enabled and cache was actually purged
             if (refreshOnPurge && result.purgedKeys?.length > 0) {
+              console.log('[SanityLive] Scheduling refresh in', refreshDebounce, 'ms')
               // Clear any pending refresh
               if (refreshTimeoutRef.current) {
                 window.clearTimeout(refreshTimeoutRef.current)
@@ -101,11 +106,12 @@ export default function SanityLive({
 
               // Debounce the refresh
               refreshTimeoutRef.current = window.setTimeout(() => {
+                console.log('[SanityLive] Triggering refresh now')
                 softRefresh()
               }, refreshDebounce)
             }
-          } catch {
-            // Silently ignore purge errors
+          } catch (err) {
+            console.error('[SanityLive] Purge error:', err)
           }
         }
       },
