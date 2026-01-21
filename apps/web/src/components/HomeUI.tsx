@@ -8,10 +8,16 @@ import { useQuery, type SanityProps } from "@tinloof/sanity-astro/loader";
 export default function HomeUI({ query, params, initial }: SanityProps<HOME_QUERY_RESULT>) {
   const { data } = useQuery<HOME_QUERY_RESULT>(query, params, { initial });
 
+  if (!data) {
+    return <div className="text-gray-500">Loading...</div>;
+  }
+
   return (
-    <div>
-      <h1>Sanity Data</h1>
-      <pre>{JSON.stringify(data, null, 2)}</pre>
-    </div>
+    <article>
+      <h1 className="text-4xl font-bold text-gray-900 mb-4">{data.title}</h1>
+      {data.description && (
+        <p className="text-lg text-gray-600 leading-relaxed">{data.description}</p>
+      )}
+    </article>
   );
 }

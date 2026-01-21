@@ -1,0 +1,29 @@
+---
+import { loadQuery, client } from "@/sanity";
+import { PAGE_QUERY, ALL_PAGES_QUERY } from "@/sanity/queries";
+import type { PAGE_QUERY_RESULT, ALL_PAGES_QUERY_RESULT } from "@/sanity/types";
+import Layout from "../layouts/layout.astro";
+import PageUI from "../components/PageUI";
+
+export async function getStaticPaths() {
+  const pages = await client.fetch<ALL_PAGES_QUERY_RESULT>(ALL_PAGES_QUERY);
+
+  return pages.map((page) => ({
+    params: { slug: page.slug },
+  }));
+}
+
+const { slug } = Astro.params;
+const result = await loadQuery<PAGE_QUERY_RESULT>(Astro, {
+  query: PAGE_QUERY,
+  params: { slug },
+});
+
+if (!result.data) {
+  return Astro.redirect("/404");
+}
+---
+
+<Layout>
+  <PageUI client:visualEditing {...result} />
+</Layout>

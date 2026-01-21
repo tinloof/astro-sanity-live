@@ -2,35 +2,33 @@
 import { ClientRouter } from "astro:transitions";
 import SanityLive from "@tinloof/sanity-astro/SanityLive.astro";
 import { VisualEditing } from "@tinloof/sanity-astro/visual-editing";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { client } from "@/sanity";
+import { SETTINGS_QUERY } from "@/sanity/queries";
+import type { SETTINGS_QUERY_RESULT } from "@/sanity/types";
+import "../styles/global.css";
+
+const settings = await client.fetch<SETTINGS_QUERY_RESULT>(SETTINGS_QUERY);
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
-    <title>Astro Basics</title>
+    <title>Astro + Sanity</title>
     <ClientRouter />
   </head>
-  <body>
-    <slot />
+  <body class="min-h-screen flex flex-col font-sans">
+    <Header siteName={settings?.siteName} navigation={settings?.navigation} />
+    <main class="flex-1 w-full max-w-3xl mx-auto px-6 py-8">
+      <slot />
+    </main>
+    <Footer footerText={settings?.footerText} footerLinks={settings?.footerLinks} />
     <SanityLive />
     <VisualEditing />
   </body>
 </html>
-
-<style>
-  html,
-  body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-  }
-
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none;
-  }
-</style>

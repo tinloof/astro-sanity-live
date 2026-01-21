@@ -15,8 +15,11 @@
   "dependencies": {
     "@astrojs/cloudflare": "^12.6.12",
     "@astrojs/react": "^4.4.2",
+    "@portabletext/react": "^6.0.0",
     "@sanity/client": "^7.14.0",
     "@sanity/vision": "^5.5.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/vite": "^4.1.18",
     "@tinloof/sanity-astro": "workspace:*",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
@@ -25,7 +28,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "sanity": "^5.4.0",
-    "styled-components": "^6.3.8"
+    "styled-components": "^6.3.8",
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.6",
