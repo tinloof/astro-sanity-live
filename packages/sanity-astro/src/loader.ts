@@ -205,14 +205,21 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
 
     const visualEditing = isVisualEditingEnabled(Astro)
 
-    // Check for lastLiveEventId from cookie (set by SanityLive after content change)
+    // Check for lastLiveEventId - first from locals (already read this request), then from cookie
     // This tells Sanity's CDN to return fresh data, bypassing any stale cached content
-    const lastLiveEventId = Astro.cookies.get(LAST_LIVE_EVENT_ID_COOKIE)?.value
-    console.log('[Loader] lastLiveEventId from cookie:', lastLiveEventId ? lastLiveEventId.slice(0, 20) + '...' : 'none')
-    if (lastLiveEventId) {
-      // Clear the event ID cookie after reading (single use)
-      Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
+    let lastLiveEventId = (Astro.locals as any)?.__sanityLastLiveEventId as string | undefined
+
+    if (!lastLiveEventId) {
+      // First query in this request - read from cookie and store in locals
+      lastLiveEventId = Astro.cookies.get(LAST_LIVE_EVENT_ID_COOKIE)?.value
+      if (lastLiveEventId) {
+        // Store in locals so subsequent queries in this request can use it
+        ;(Astro.locals as any).__sanityLastLiveEventId = lastLiveEventId
+        // Clear the cookie (single use across requests, not queries)
+        Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
+      }
     }
+    console.log('[Loader] lastLiveEventId:', lastLiveEventId ? lastLiveEventId.slice(0, 20) + '...' : 'none')
 
     // Only use drafts perspective if we have a token
     const perspective = visualEditing && token ? 'drafts' : 'published'
