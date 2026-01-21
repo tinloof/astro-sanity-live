@@ -29,6 +29,6 @@ const settings = await client.fetch<SETTINGS_QUERY_RESULT>(SETTINGS_QUERY);
     </main>
     <Footer footerText={settings?.footerText} footerLinks={settings?.footerLinks} />
     <VisualEditing />
-    <SanityLive />
+    <SanityLive refreshDebounce={1000} />
   </body>
 </html>
