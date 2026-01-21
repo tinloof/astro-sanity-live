@@ -2,11 +2,11 @@
 /**
  * Sanity Visual Editing component for Astro.
  *
- * This component enables click-to-edit functionality when viewing
- * the site with visual editing enabled (via cookie or URL param).
+ * This component enables click-to-edit functionality when the site
+ * is viewed inside Sanity's Presentation tool (iframe detection).
  *
- * Add this to your layout - it will only activate when visual
- * editing is enabled.
+ * Add this to your layout - it will only activate when inside
+ * the Presentation tool or when the visual editing cookie is set.
  *
  * @example
  * ```astro
@@ -25,29 +25,36 @@ interface Props {
    */
   zIndex?: number
   /**
-   * The refresh strategy when content changes in the Studio
-   * - 'reload': Page reload with debouncing (default)
-   * - 'manual': No automatic refresh
-   * @default 'reload'
-   */
-  refresh?: 'reload' | 'manual'
-  /**
    * Debounce delay in ms before refreshing after mutations stop
-   * @default 500
+   * @default 300
    */
   refreshDebounce?: number
 }
 
 const {
   zIndex = 9999,
-  refresh = 'reload',
-  refreshDebounce = 500,
+  refreshDebounce = 300,
 } = Astro.props
 ---
 
 <VisualEditingComponent
   client:only="react"
   zIndex={zIndex}
-  refresh={refresh}
   refreshDebounce={refreshDebounce}
 />
+
+<script>
+  import { navigate } from 'astro:transitions/client'
+
+  // Handle refresh requests from VisualEditing component
+  function handleVisualEditingRefresh() {
+    // Use View Transitions to refresh without full page reload
+    navigate(window.location.href, { history: 'replace' })
+  }
+
+  // Set up listener (runs once, persists across navigations)
+  if (!(window as any).__visualEditingRefreshListenerAdded) {
+    window.addEventListener('sanity:visual-editing-refresh', handleVisualEditingRefresh)
+    ;(window as any).__visualEditingRefreshListenerAdded = true
+  }
+</script>

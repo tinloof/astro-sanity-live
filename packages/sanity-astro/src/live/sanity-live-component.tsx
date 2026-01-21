@@ -2,8 +2,17 @@ import { useEffect, useRef } from 'react'
 import { createClient } from '@sanity/client'
 import type { PurgeResponse } from './purge-handler'
 
-// Cookie name must match the constant in constants.ts
+// Cookie names must match the constants in constants.ts
 const LAST_LIVE_EVENT_ID_COOKIE = 'sanity-live-event-id'
+const VISUAL_EDITING_COOKIE = 'sanity-visual-editing'
+
+/**
+ * Check if visual editing mode is active (in Presentation tool)
+ */
+function isVisualEditingActive(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.cookie.includes(`${VISUAL_EDITING_COOKIE}=true`)
+}
 
 export type SanityLiveProps = {
   /**
@@ -102,18 +111,18 @@ export default function SanityLive({
             const result = await response.json() as PurgeResponse
             console.log('[SanityLive] Purge result:', result.purgedKeys?.length, 'keys purged')
 
+            // Store the event ID in a cookie for fresh CDN data on next request
+            if (eventId) {
+              document.cookie = `${LAST_LIVE_EVENT_ID_COOKIE}=${encodeURIComponent(eventId)}; path=/; max-age=60`
+            }
+
             // Refresh the page if enabled and cache was actually purged
-            if (refreshOnPurge && result.purgedKeys?.length > 0) {
+            // Skip if visual editing is active (VisualEditing component handles refresh)
+            if (refreshOnPurge && result.purgedKeys?.length > 0 && !isVisualEditingActive()) {
               console.log('[SanityLive] Scheduling refresh in', refreshDebounce, 'ms')
               // Clear any pending refresh
               if (refreshTimeoutRef.current) {
                 window.clearTimeout(refreshTimeoutRef.current)
-              }
-
-              // Store the event ID in a cookie - this will be passed to Sanity's CDN
-              // on the next request to ensure we get fresh data
-              if (eventId) {
-                document.cookie = `${LAST_LIVE_EVENT_ID_COOKIE}=${encodeURIComponent(eventId)}; path=/; max-age=60`
               }
 
               // Debounce the refresh

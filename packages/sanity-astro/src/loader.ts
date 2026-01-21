@@ -189,17 +189,10 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
 
   /**
    * Check if visual editing is enabled for this request.
-   * Also handles enabling visual editing via URL parameter.
+   * Visual editing is enabled when the cookie is set (by the client-side
+   * component when it detects it's inside Sanity's Presentation tool iframe).
    */
   function isVisualEditingEnabled(Astro: AstroGlobal): boolean {
-    // Check for URL parameter to enable visual editing
-    if (Astro.url.searchParams.has(VISUAL_EDITING_ENABLED)) {
-      // Set cookie so subsequent navigations stay in visual editing mode
-      Astro.cookies.set(VISUAL_EDITING_ENABLED, 'true', { path: '/' })
-      return true
-    }
-
-    // Check for existing visual editing cookie
     const cookie = Astro.cookies.get(VISUAL_EDITING_ENABLED)
     return cookie?.value === 'true'
   }
