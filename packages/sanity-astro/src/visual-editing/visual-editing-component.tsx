@@ -37,11 +37,14 @@ function hasVisualEditingCookie(): boolean {
 }
 
 /**
- * Set the visual editing cookie
+ * Set the visual editing cookie.
+ * Uses SameSite=None; Secure for cross-origin iframe (Presentation tool).
  */
 function setVisualEditingCookie(): void {
   if (typeof document === 'undefined') return
-  document.cookie = `${VISUAL_EDITING_ENABLED}=true; path=/; max-age=86400`
+  // SameSite=None required for cross-origin iframe (Presentation tool)
+  // Secure required when using SameSite=None (only works on HTTPS)
+  document.cookie = `${VISUAL_EDITING_ENABLED}=true; path=/; max-age=86400; SameSite=None; Secure`
 }
 
 /**
