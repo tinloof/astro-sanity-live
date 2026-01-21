@@ -1,7 +1,6 @@
 import { createHashHistory, type History, type Listener } from 'history'
 import { Studio } from 'sanity'
 import { useMemo } from 'react'
-// @ts-expect-error - Virtual module provided by vite-plugin-sanity-studio
 import { studioConfig } from 'sanity:studio'
 
 if (!studioConfig) {

@@ -3,14 +3,19 @@ import { loadQuery } from "@/sanity";
 import { HOME_QUERY } from "@/sanity/queries";
 import type { HOME_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
-import HomeUI from "../components/HomeUI";
 import DebugPanel from "../components/DebugPanel.astro";
 
 const result = await loadQuery<HOME_QUERY_RESULT>(Astro, { query: HOME_QUERY });
+const { data } = result;
 ---
 
 <Layout>
-  <HomeUI client:visualEditing {...result} />
+  <article>
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">{data?.title}</h1>
+    {data?.description && (
+      <p class="text-lg text-gray-600 leading-relaxed">{data.description}</p>
+    )}
+  </article>
   <DebugPanel
     perspective={result.perspective}
     cacheStatus={result.cacheStatus}

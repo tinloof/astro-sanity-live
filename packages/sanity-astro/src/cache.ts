@@ -1,8 +1,18 @@
 /**
  * Cloudflare Cache API with Stale-While-Revalidate support
+ * and tag-based cache invalidation via Sanity syncTags.
  *
  * Based on: https://gist.github.com/richardscarrott/0d54f2252d434ce90d6f743192fe4d91
  */
+
+import { CACHE_INTERNAL_URL } from './constants'
+
+// Cloudflare Workers extends CacheStorage with a default property
+declare global {
+  interface CacheStorage {
+    default: Cache
+  }
+}
 
 export type CacheOptions = {
   /**
@@ -20,19 +30,35 @@ export type CacheOptions = {
    * @default 'sanity'
    */
   keyPrefix?: string
-  /**
-   * Tags for cache invalidation (future use with Sanity webhooks)
-   */
+}
+
+/**
+ * Internal type for cache entries with tags
+ */
+type CacheEntry<T> = {
+  data: T
   tags?: string[]
 }
 
-type FetchFunction<T> = () => Promise<T>
+/**
+ * Tag index maps tags to cache key URLs
+ */
+type TagIndex = {
+  [tag: string]: string[] // tag -> array of cache key URLs
+}
+
+type FetchFunction<T> = () => Promise<{ data: T; tags?: string[] }>
 
 type CacheResult<T> = {
   data: T
   status: 'HIT' | 'MISS' | 'STALE'
   age?: number
 }
+
+// Special cache key for the tag index
+const TAG_INDEX_KEY = new Request(`${CACHE_INTERNAL_URL}/__tag_index__`)
+
+type ExecutionContext = { waitUntil: (promise: Promise<unknown>) => void } | null
 
 /**
  * Parse cache-control header to extract directives
@@ -62,7 +88,7 @@ function createCacheKey(
   params: Record<string, unknown>,
   prefix: string
 ): Request {
-  const url = new URL('https://cache.internal')
+  const url = new URL(CACHE_INTERNAL_URL)
   url.pathname = `/${prefix}`
   url.searchParams.set('q', query)
   url.searchParams.set('p', JSON.stringify(params))
@@ -116,7 +142,55 @@ function isStaleButValid(response: Response): boolean {
 }
 
 /**
+ * Get the tag index from cache
+ */
+async function getTagIndex(cache: Cache): Promise<TagIndex> {
+  const response = await cache.match(TAG_INDEX_KEY)
+  if (!response) return {}
+  return response.json() as Promise<TagIndex>
+}
+
+/**
+ * Update the tag index in cache
+ */
+async function updateTagIndex(cache: Cache, index: TagIndex): Promise<void> {
+  const response = new Response(JSON.stringify(index), {
+    headers: {
+      'content-type': 'application/json',
+      // Long TTL for tag index - it's updated on every cache write
+      'cdn-cache-control': 'max-age=31536000',
+    },
+  })
+  await cache.put(TAG_INDEX_KEY, response)
+}
+
+/**
+ * Add cache key to tag index
+ */
+async function addToTagIndex(
+  cache: Cache,
+  cacheKeyUrl: string,
+  tags: string[]
+): Promise<void> {
+  const index = await getTagIndex(cache)
+
+  for (const tag of tags) {
+    if (!index[tag]) {
+      index[tag] = []
+    }
+    if (!index[tag].includes(cacheKeyUrl)) {
+      index[tag].push(cacheKeyUrl)
+    }
+  }
+
+  await updateTagIndex(cache, index)
+}
+
+/**
  * Fetch with Cloudflare Cache API and SWR support
+ *
+ * The fetchFn should return { data, tags } where tags are Sanity syncTags
+ * for cache invalidation.
  *
  * @example
  * ```ts
@@ -125,14 +199,15 @@ function isStaleButValid(response: Response): boolean {
  *   query,
  *   params,
  *   async () => {
- *     return await sanityClient.fetch(query, params)
+ *     const response = await sanityClient.fetch(query, params, { filterResponse: false })
+ *     return { data: response, tags: response.syncTags }
  *   },
  *   { maxAge: 300, staleWhileRevalidate: 3600 }
  * )
  * ```
  */
 export async function cachedFetch<T>(
-  ctx: ExecutionContext | null,
+  ctx: ExecutionContext,
   query: string,
   params: Record<string, unknown>,
   fetchFn: FetchFunction<T>,
@@ -146,26 +221,24 @@ export async function cachedFetch<T>(
 
   // If no execution context (e.g., dev mode), skip caching
   if (!ctx) {
-    console.log('[Cache] No execution context, skipping cache')
-    const data = await fetchFn()
+    const { data } = await fetchFn()
     return { data, status: 'MISS' }
   }
 
   // Check if caches API is available (Cloudflare Workers)
   if (typeof caches === 'undefined') {
-    console.log('[Cache] caches API not available, skipping cache')
-    const data = await fetchFn()
+    const { data } = await fetchFn()
     return { data, status: 'MISS' }
   }
 
   const cache = caches.default
   if (!cache) {
-    console.log('[Cache] caches.default not available, skipping cache')
-    const data = await fetchFn()
+    const { data } = await fetchFn()
     return { data, status: 'MISS' }
   }
 
   const cacheKey = createCacheKey(query, params, keyPrefix)
+  const cacheKeyUrl = cacheKey.url
 
   try {
     // Check cache
@@ -173,28 +246,30 @@ export async function cachedFetch<T>(
 
     if (cachedResponse) {
       const age = getCacheAge(cachedResponse)
-      const data = await cachedResponse.json() as T
+      const entry = await cachedResponse.json() as CacheEntry<T>
+      const data = entry.data
 
       // Check if fresh
       if (isFresh(cachedResponse)) {
-        console.log('[Cache] HIT (fresh)', { age })
         return { data, status: 'HIT', age }
       }
 
       // Check if stale but within SWR window
       if (isStaleButValid(cachedResponse)) {
-        console.log('[Cache] STALE - serving stale, revalidating in background', { age })
-
         // Revalidate in background
         ctx.waitUntil(
           (async () => {
             try {
-              const freshData = await fetchFn()
-              const response = createCacheResponse(freshData, maxAge, staleWhileRevalidate)
+              const { data: freshData, tags } = await fetchFn()
+              const response = createCacheResponse({ data: freshData, tags }, maxAge, staleWhileRevalidate)
               await cache.put(cacheKey, response)
-              console.log('[Cache] Background revalidation complete')
-            } catch (err) {
-              console.error('[Cache] Background revalidation failed:', err)
+
+              // Update tag index if we have tags
+              if (tags?.length) {
+                await addToTagIndex(cache, cacheKeyUrl, tags)
+              }
+            } catch {
+              // Silently ignore background revalidation errors
             }
           })()
         )
@@ -203,23 +278,28 @@ export async function cachedFetch<T>(
       }
 
       // Cache expired (past SWR window) - fetch fresh
-      console.log('[Cache] EXPIRED - fetching fresh data', { age })
-    } else {
-      console.log('[Cache] MISS - no cached response found')
     }
 
     // Cache miss or expired - fetch fresh data
-    const data = await fetchFn()
+    const { data, tags } = await fetchFn()
 
     // Store in cache (don't await)
-    const response = createCacheResponse(data, maxAge, staleWhileRevalidate)
-    ctx.waitUntil(cache.put(cacheKey, response))
+    const response = createCacheResponse({ data, tags }, maxAge, staleWhileRevalidate)
+    ctx.waitUntil(
+      (async () => {
+        await cache.put(cacheKey, response)
+
+        // Update tag index if we have tags
+        if (tags?.length) {
+          await addToTagIndex(cache, cacheKeyUrl, tags)
+        }
+      })()
+    )
 
     return { data, status: 'MISS' }
-  } catch (err) {
-    console.error('[Cache] Error:', err)
+  } catch {
     // On cache error, fall back to direct fetch
-    const data = await fetchFn()
+    const { data } = await fetchFn()
     return { data, status: 'MISS' }
   }
 }
@@ -228,11 +308,11 @@ export async function cachedFetch<T>(
  * Create a cacheable response with proper headers
  */
 function createCacheResponse<T>(
-  data: T,
+  entry: CacheEntry<T>,
   maxAge: number,
   staleWhileRevalidate: number
 ): Response {
-  return new Response(JSON.stringify(data), {
+  return new Response(JSON.stringify(entry), {
     headers: {
       'content-type': 'application/json',
       // Browser should not cache (we handle it at the edge)
@@ -248,13 +328,56 @@ function createCacheResponse<T>(
 }
 
 /**
- * Purge cache entries by prefix (for webhook-based invalidation)
+ * Purge cache entries by tags
+ *
+ * This is called when Sanity live events indicate content has changed.
+ * It looks up the tag index to find which cache entries need to be purged.
+ *
+ * @returns Object with purged cache keys and tags
  */
-export async function purgeCache(prefix: string): Promise<void> {
-  // Note: Cloudflare's Cache API doesn't support listing/purging by prefix
-  // For proper invalidation, you'd need to:
-  // 1. Track cache keys in KV
-  // 2. Use Cloudflare's Purge API with zone ID
-  // This is a placeholder for future implementation
-  console.log('[Cache] Purge requested for prefix:', prefix)
+export async function purgeCacheByTags(
+  tags: string[]
+): Promise<{ purgedKeys: string[]; purgedTags: string[] }> {
+  // Check if caches API is available
+  if (typeof caches === 'undefined') {
+    return { purgedKeys: [], purgedTags: [] }
+  }
+
+  const cache = caches.default
+  if (!cache) {
+    return { purgedKeys: [], purgedTags: [] }
+  }
+
+  try {
+    const index = await getTagIndex(cache)
+    const purgedKeys = new Set<string>()
+    const purgedTags: string[] = []
+
+    for (const tag of tags) {
+      if (index[tag]) {
+        purgedTags.push(tag)
+
+        for (const cacheKeyUrl of index[tag]) {
+          // Delete the cache entry
+          const deleted = await cache.delete(new Request(cacheKeyUrl))
+          if (deleted) {
+            purgedKeys.add(cacheKeyUrl)
+          }
+        }
+
+        // Remove tag from index
+        delete index[tag]
+      }
+    }
+
+    // Update the tag index
+    await updateTagIndex(cache, index)
+
+    return {
+      purgedKeys: Array.from(purgedKeys),
+      purgedTags,
+    }
+  } catch {
+    return { purgedKeys: [], purgedTags: [] }
+  }
 }

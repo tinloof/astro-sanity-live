@@ -14,8 +14,6 @@ export default defineConfig({
   integrations: [
     react(),
     sanity({
-      projectId: import.meta.env.PUBLIC_SANITY_PROJECT_ID || "fl1nk1cy",
-      dataset: import.meta.env.PUBLIC_SANITY_DATASET || "production",
       studioBasePath: "/cms",
     }),
   ],

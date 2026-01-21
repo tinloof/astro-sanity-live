@@ -1,42 +1,12 @@
 /// <reference types="astro/client" />
 
-import { createQueryStore, type QueryResponseInitial } from '@sanity/react-loader'
-import type { QueryParams } from '@sanity/client'
-
-// Re-export for use in components
-export type { QueryResponseInitial }
-
-/**
- * Props type for components using client:visualEditing directive.
- * Use this as the base props type for your Sanity-connected components.
- *
- * @example
- * ```tsx
- * import { type SanityProps } from '@tinloof/sanity-astro/loader'
- * import type { HOME_QUERY_RESULT } from '@/sanity/types'
- *
- * export default function HomeUI({ query, params, initial }: SanityProps<HOME_QUERY_RESULT>) {
- *   const { data } = useQuery(query, params, { initial })
- *   return <div>{data.title}</div>
- * }
- * ```
- */
-export type SanityProps<T> = {
-  query: string
-  params: QueryParams
-  initial: QueryResponseInitial<T>
-  // Allow extra props from loadQuery result spread (data, sourceMap, perspective, etc.)
-  [key: string]: unknown
-}
 import {
   type ClientConfig,
-  type ContentSourceMap,
   createClient as sanityCreateClient,
   type SanityClient,
   type QueryParams,
 } from '@sanity/client'
-import { setConfig, addTags, resetTags } from './config'
-import { LIVE_EVENT_COOKIE, VISUAL_EDITING_ENABLED, DEFAULT_API_VERSION } from './constants'
+import { VISUAL_EDITING_ENABLED, DEFAULT_API_VERSION } from './constants'
 import { cachedFetch, type CacheOptions } from './cache'
 
 export type StegaConfig = {
@@ -71,7 +41,6 @@ export type SanityConfig = {
 type AstroGlobal = {
   cookies: {
     get: (name: string) => { value: string } | undefined
-    delete: (name: string) => void
     set: (name: string, value: string, options?: { path?: string }) => void
   }
   url: URL
@@ -91,43 +60,25 @@ export type LoadQueryOptions = {
   /**
    * Cache options for this query.
    * Set to `false` to disable caching.
-   * @default { maxAge: 300, staleWhileRevalidate: 3600 }
+   * @default { maxAge: 10, staleWhileRevalidate: 30 }
    */
   cache?: CacheOptions | false
 }
 
 export type LoadQueryResult<T> = {
   data: T
-  sourceMap?: ContentSourceMap
   perspective: 'published' | 'drafts'
-  /** Initial data for useQuery hydration */
-  initial: QueryResponseInitial<T>
-  /** The GROQ query */
-  query: string
-  /** Query params */
-  params: QueryParams
   /** Cache status - HIT, MISS, STALE, or BYPASS (for visual editing) */
   cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS'
   /** Cache age in seconds (if cached) */
   cacheAge?: number
 }
 
-// Create a singleton query store with SSR mode
-const queryStore = createQueryStore({
-  client: false, // Don't initialize client in the store - we set it per-request
-  ssr: true,     // Enable SSR mode
-})
-
-// Export the hooks from the query store for use in React components
-export const { useQuery, useLiveMode } = queryStore
-
 type CreateSanityLoaderReturn = {
   client: SanityClient
-  browserClient: SanityClient
   config: SanityConfig
   /**
    * Load content from Sanity with visual editing support.
-   * Returns data that can be passed to React islands using useSanityData.
    */
   loadQuery: <T>(
     Astro: AstroGlobal,
@@ -143,7 +94,7 @@ const DEFAULT_CACHE_OPTIONS: CacheOptions = {
 }
 
 /**
- * Creates a Sanity loader with support for live preview in React islands.
+ * Creates a Sanity loader with support for visual editing.
  * Reads from PUBLIC_SANITY_PROJECT_ID and PUBLIC_SANITY_DATASET environment variables.
  */
 export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoaderReturn {
@@ -195,20 +146,6 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     },
   })
 
-  // Browser client for live mode (no token, used client-side)
-  const browserClient = sanityCreateClient({
-    ...sanityConfig,
-    ...config?.client,
-    useCdn: false,
-    stega: {
-      enabled: true,
-      studioUrl: stegaStudioUrl,
-    },
-  })
-
-  // Set the server client for the query store
-  queryStore.setServerClient(stegaClient)
-
   /**
    * Check if visual editing is enabled for this request.
    * Also handles enabling visual editing via URL parameter.
@@ -230,22 +167,12 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     Astro: AstroGlobal,
     { query, params = {}, cache: cacheOption }: LoadQueryOptions
   ): Promise<LoadQueryResult<T>> {
-    let lastLiveEventId: string | undefined
-    const liveCookie = Astro.cookies.get(LIVE_EVENT_COOKIE)
-
-    if (liveCookie) {
-      lastLiveEventId = liveCookie.value
-      Astro.cookies.delete(LIVE_EVENT_COOKIE)
-      resetTags()
-    }
-
     const visualEditing = isVisualEditingEnabled(Astro)
     // Only use drafts perspective if we have a token
     const perspective = visualEditing && token ? 'drafts' : 'published'
     const activeClient = visualEditing ? stegaClient : client
 
     // Get Cloudflare execution context for caching
-    // Try both locations - direct on locals (new adapter) and nested under runtime (legacy)
     const ctx = Astro.locals?.ctx ?? Astro.locals?.runtime?.ctx ?? null
 
     // Determine cache options - disable for visual editing, use defaults otherwise
@@ -254,32 +181,33 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       ? { ...DEFAULT_CACHE_OPTIONS, ...config?.cache, ...(typeof cacheOption === 'object' ? cacheOption : {}) }
       : undefined
 
-    // Function to fetch from Sanity
+    // Function to fetch from Sanity (returns data and tags for cache)
     const fetchFromSanity = async () => {
-      const response = await activeClient.fetch(
-        query,
-        params,
-        {
-          lastLiveEventId,
-          filterResponse: false,
-          perspective,
-          useCdn: !visualEditing,
-          resultSourceMap: visualEditing ? 'withKeyArraySelector' : false,
-          ...(visualEditing && { cache: 'no-store' }),
-        }
-      )
-      return response
+      const options = {
+        filterResponse: false,
+        perspective,
+        useCdn: !visualEditing,
+        resultSourceMap: visualEditing ? 'withKeyArraySelector' : false,
+        // cache option is valid but @sanity/client types don't include it in all overloads
+        ...(visualEditing && { cache: 'no-store' }),
+      }
+
+      const response = await activeClient.fetch(query, params, options as Parameters<typeof activeClient.fetch>[2])
+
+      // Return both result and syncTags for cache invalidation
+      return {
+        data: response,
+        tags: response.syncTags as string[] | undefined,
+      }
     }
 
     let result: T
-    let syncTags: string[] = []
-    let resultSourceMap: ContentSourceMap | undefined
     let cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS' = 'BYPASS'
     let cacheAge: number | undefined
 
     // Use caching for production queries (non-visual-editing)
     if (shouldCache && cacheOptions) {
-      const cacheResult = await cachedFetch<{ result: T; syncTags?: string[]; resultSourceMap?: ContentSourceMap }>(
+      const cacheResult = await cachedFetch<{ result: T; syncTags?: string[] }>(
         ctx,
         query,
         params,
@@ -288,40 +216,24 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
       )
 
       result = cacheResult.data.result
-      syncTags = cacheResult.data.syncTags ?? []
-      resultSourceMap = cacheResult.data.resultSourceMap
       cacheStatus = cacheResult.status
       cacheAge = cacheResult.age
     } else {
       // Direct fetch for visual editing (no caching)
-      const response = await fetchFromSanity()
+      const { data: response } = await fetchFromSanity()
       result = response.result as T
-      syncTags = response.syncTags ?? []
-      resultSourceMap = response.resultSourceMap
       cacheStatus = 'BYPASS'
     }
 
-    addTags(syncTags)
-
     return {
       data: result,
-      sourceMap: resultSourceMap,
       perspective,
-      query,
-      params,
       cacheStatus,
       cacheAge,
-      // Initial data for useQuery hydration
-      initial: {
-        data: result,
-        sourceMap: resultSourceMap,
-      },
     }
   }
 
-  setConfig(sanityConfig)
-
-  return { client, browserClient, config: sanityConfig, loadQuery }
+  return { client, config: sanityConfig, loadQuery }
 }
 
 export { type SanityClient, type QueryParams }

@@ -1,0 +1,79 @@
+---
+/**
+ * SanityLive component for real-time cache invalidation.
+ *
+ * This component subscribes to Sanity's live events and purges
+ * the Cloudflare cache when content changes. Include it in your
+ * layout to enable automatic cache invalidation.
+ *
+ * @example
+ * ```astro
+ * ---
+ * import { SanityLive } from '@tinloof/sanity-astro/live'
+ * ---
+ * <SanityLive />
+ * ```
+ */
+import SanityLiveComponent from './sanity-live-component'
+import { DEFAULT_API_VERSION, DEFAULT_PURGE_ENDPOINT, DEFAULT_REFRESH_DEBOUNCE } from '../constants'
+
+interface Props {
+  /**
+   * Whether to refresh the page after cache purge
+   * @default true
+   */
+  refreshOnPurge?: boolean
+  /**
+   * Debounce delay before refreshing (ms)
+   * @default 100
+   */
+  refreshDebounce?: number
+  /**
+   * API endpoint for cache purge
+   * @default '/api/sanity/purge'
+   */
+  purgeEndpoint?: string
+}
+
+const {
+  refreshOnPurge = true,
+  refreshDebounce = DEFAULT_REFRESH_DEBOUNCE,
+  purgeEndpoint = DEFAULT_PURGE_ENDPOINT,
+} = Astro.props
+
+// Get config from environment variables
+const projectId = import.meta.env.PUBLIC_SANITY_PROJECT_ID
+const dataset = import.meta.env.PUBLIC_SANITY_DATASET
+const apiVersion = import.meta.env.PUBLIC_SANITY_API_VERSION || DEFAULT_API_VERSION
+
+if (!projectId || !dataset) {
+  console.warn('[SanityLive] Missing PUBLIC_SANITY_PROJECT_ID or PUBLIC_SANITY_DATASET')
+}
+---
+
+{projectId && dataset && (
+  <SanityLiveComponent
+    client:only="react"
+    projectId={projectId}
+    dataset={dataset}
+    apiVersion={apiVersion}
+    refreshOnPurge={refreshOnPurge}
+    refreshDebounce={refreshDebounce}
+    purgeEndpoint={purgeEndpoint}
+  />
+)}
+
+<script>
+  import { navigate } from 'astro:transitions/client'
+
+  // Handler for refresh events from SanityLive component
+  function handleRefresh() {
+    navigate(window.location.href, { history: 'replace' })
+  }
+
+  // Set up listener (runs once, persists across navigations)
+  if (!(window as any).__sanityRefreshListenerAdded) {
+    window.addEventListener('sanity:refresh', handleRefresh)
+    ;(window as any).__sanityRefreshListenerAdded = true
+  }
+</script>

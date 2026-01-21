@@ -3,8 +3,8 @@ import { loadQuery, client } from "@/sanity";
 import { PAGE_QUERY, ALL_PAGES_QUERY } from "@/sanity/queries";
 import type { PAGE_QUERY_RESULT, ALL_PAGES_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
-import PageUI from "../components/PageUI";
 import DebugPanel from "../components/DebugPanel.astro";
+import { PortableText } from "@portabletext/react";
 
 export async function getStaticPaths() {
   const pages = await client.fetch<ALL_PAGES_QUERY_RESULT>(ALL_PAGES_QUERY);
@@ -23,10 +23,19 @@ const result = await loadQuery<PAGE_QUERY_RESULT>(Astro, {
 if (!result.data) {
   return Astro.redirect("/404");
 }
+
+const { data } = result;
 ---
 
 <Layout>
-  <PageUI client:visualEditing {...result} />
+  <article>
+    <h1 class="text-4xl font-bold text-gray-900 mb-6">{data.title}</h1>
+    {data.content && (
+      <div class="prose prose-lg prose-gray">
+        <PortableText value={data.content} />
+      </div>
+    )}
+  </article>
   <DebugPanel
     perspective={result.perspective}
     cacheStatus={result.cacheStatus}

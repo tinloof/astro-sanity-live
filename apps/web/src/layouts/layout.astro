@@ -1,7 +1,7 @@
 ---
 import { ClientRouter } from "astro:transitions";
-import SanityLive from "@tinloof/sanity-astro/SanityLive.astro";
 import { VisualEditing } from "@tinloof/sanity-astro/visual-editing";
+import { SanityLive } from "@tinloof/sanity-astro/live";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import { client } from "@/sanity";
@@ -28,7 +28,7 @@ const settings = await client.fetch<SETTINGS_QUERY_RESULT>(SETTINGS_QUERY);
       <slot />
     </main>
     <Footer footerText={settings?.footerText} footerLinks={settings?.footerLinks} />
-    <SanityLive />
     <VisualEditing />
+    <SanityLive />
   </body>
 </html>
