@@ -13,7 +13,5 @@
   "vars": {
     "PUBLIC_SANITY_PROJECT_ID": "fl1nk1cy",
     "PUBLIC_SANITY_DATASET": "production",
-    // Set this to your production URL for Sanity Presentation tool
-    "SANITY_STUDIO_PREVIEW_URL": "https://astro-sanity-live.pages.dev",
   },
 }

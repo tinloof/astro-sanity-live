@@ -85,7 +85,6 @@ export default function SanityLive({
       next: async (event) => {
         // Skip events that arrive too soon after mount (initial sync)
         if (Date.now() - mountTimeRef.current < MOUNT_GRACE_PERIOD) {
-          console.log('[SanityLive] Skipping event (grace period)')
           return
         }
 
@@ -93,7 +92,6 @@ export default function SanityLive({
         if (event.type === 'message' && event.tags && event.tags.length > 0) {
           // Extract event ID - this tells Sanity's CDN to return fresh data
           const eventId = event.id
-          console.log('[SanityLive] Received event with tags:', event.tags.length, JSON.stringify(event.tags.slice(0, 5)), 'eventId:', eventId ? eventId.slice(0, 20) + '...' : 'none')
 
           try {
             // Call purge API with tags and event ID
@@ -104,12 +102,10 @@ export default function SanityLive({
             })
 
             if (!response.ok) {
-              console.log('[SanityLive] Purge request failed:', response.status)
               return
             }
 
             const result = await response.json() as PurgeResponse
-            console.log('[SanityLive] Purge result:', result.purgedKeys?.length, 'keys purged')
 
             // Store the event ID in a cookie for fresh CDN data on next request
             if (eventId) {
@@ -119,7 +115,6 @@ export default function SanityLive({
             // Refresh the page if enabled and cache was actually purged
             // Skip if visual editing is active (VisualEditing component handles refresh)
             if (refreshOnPurge && result.purgedKeys?.length > 0 && !isVisualEditingActive()) {
-              console.log('[SanityLive] Scheduling refresh in', refreshDebounce, 'ms')
               // Clear any pending refresh
               if (refreshTimeoutRef.current) {
                 window.clearTimeout(refreshTimeoutRef.current)
@@ -127,7 +122,6 @@ export default function SanityLive({
 
               // Debounce the refresh
               refreshTimeoutRef.current = window.setTimeout(() => {
-                console.log('[SanityLive] Triggering refresh now')
                 softRefresh()
               }, refreshDebounce)
             }

@@ -3,10 +3,8 @@ import { loadQuery } from "@/sanity";
 import { HOME_QUERY } from "@/sanity/queries";
 import type { HOME_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
-import { DebugPanel } from "@tinloof/sanity-astro/debug";
 
-const result = await loadQuery<HOME_QUERY_RESULT>(Astro, { query: HOME_QUERY });
-const { data } = result;
+const { data } = await loadQuery<HOME_QUERY_RESULT>(Astro, { query: HOME_QUERY });
 ---
 
 <Layout>
@@ -16,11 +14,4 @@ const { data } = result;
       <p class="text-lg text-gray-600 leading-relaxed">{data.description}</p>
     )}
   </article>
-  <DebugPanel
-    perspective={result.perspective}
-    cacheStatus={result.cacheStatus}
-    cacheAge={result.cacheAge}
-    tags={result.tags}
-    ms={result.ms}
-  />
 </Layout>

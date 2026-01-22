@@ -1,4 +1,3 @@
-import { createSanityLoader } from '@tinloof/sanity-astro/loader'
-import '@/sanity/types'
+import { initSanity } from '@tinloof/sanity-astro'
 
-export const { client, config, loadQuery } = createSanityLoader()
+export const { client, config, loadQuery, SanityLive, VisualEditing } = await initSanity()

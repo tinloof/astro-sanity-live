@@ -6,6 +6,9 @@
  * the Cloudflare cache when content changes. Include it in your
  * layout to enable automatic cache invalidation.
  *
+ * Configuration is automatically picked up from initSanity() if called,
+ * otherwise falls back to environment variables.
+ *
  * @example
  * ```astro
  * ---
@@ -15,7 +18,7 @@
  * ```
  */
 import SanityLiveComponent from './sanity-live-component'
-import { DEFAULT_API_VERSION, DEFAULT_PURGE_ENDPOINT, DEFAULT_REFRESH_DEBOUNCE } from '../constants'
+import { getSanityConfig, getLiveConfig } from '../config-store'
 
 interface Props {
   /**
@@ -24,34 +27,45 @@ interface Props {
    */
   refreshOnPurge?: boolean
   /**
-   * Debounce delay before refreshing (ms)
+   * Debounce delay before refreshing (ms).
+   * If initSanity() was called with live.refreshDebounce, that value is used as default.
    * @default 100
    */
   refreshDebounce?: number
   /**
-   * API endpoint for cache purge
+   * API endpoint for cache purge.
+   * If initSanity() was called with live.purgeEndpoint, that value is used as default.
    * @default '/api/sanity/purge'
    */
   purgeEndpoint?: string
 }
 
+// Get config from store (set by initSanity) or fall back to env vars
+let projectId: string | undefined
+let dataset: string | undefined
+let apiVersion: string | undefined
+
+try {
+  const sanityConfig = getSanityConfig()
+  projectId = sanityConfig.projectId
+  dataset = sanityConfig.dataset
+  apiVersion = sanityConfig.apiVersion
+} catch {
+  // getSanityConfig throws if not configured - this is expected if initSanity wasn't called
+  console.warn('[SanityLive] Sanity not configured. Call initSanity() or set PUBLIC_SANITY_PROJECT_ID and PUBLIC_SANITY_DATASET.')
+}
+
+// Get live config defaults
+const liveConfig = getLiveConfig()
+
 const {
   refreshOnPurge = true,
-  refreshDebounce = DEFAULT_REFRESH_DEBOUNCE,
-  purgeEndpoint = DEFAULT_PURGE_ENDPOINT,
+  refreshDebounce = liveConfig.refreshDebounce,
+  purgeEndpoint = liveConfig.purgeEndpoint,
 } = Astro.props
-
-// Get config from environment variables
-const projectId = import.meta.env.PUBLIC_SANITY_PROJECT_ID
-const dataset = import.meta.env.PUBLIC_SANITY_DATASET
-const apiVersion = import.meta.env.PUBLIC_SANITY_API_VERSION || DEFAULT_API_VERSION
-
-if (!projectId || !dataset) {
-  console.warn('[SanityLive] Missing PUBLIC_SANITY_PROJECT_ID or PUBLIC_SANITY_DATASET')
-}
 ---
 
-{projectId && dataset && (
+{projectId && dataset && apiVersion && (
   <SanityLiveComponent
     client:only="react"
     projectId={projectId}

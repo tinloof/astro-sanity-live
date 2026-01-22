@@ -1,18 +1,9 @@
 ---
-import { loadQuery, client } from "@/sanity";
-import { PAGE_QUERY, ALL_PAGES_QUERY } from "@/sanity/queries";
-import type { PAGE_QUERY_RESULT, ALL_PAGES_QUERY_RESULT } from "@/sanity/types";
+import { loadQuery } from "@/sanity";
+import { PAGE_QUERY } from "@/sanity/queries";
+import type { PAGE_QUERY_RESULT } from "@/sanity/types";
 import Layout from "../layouts/layout.astro";
-import { DebugPanel } from "@tinloof/sanity-astro/debug";
 import { PortableText } from "@portabletext/react";
-
-export async function getStaticPaths() {
-  const pages = await client.fetch<ALL_PAGES_QUERY_RESULT>(ALL_PAGES_QUERY);
-
-  return pages.map((page) => ({
-    params: { slug: page.slug },
-  }));
-}
 
 const { slug } = Astro.params;
 const result = await loadQuery<PAGE_QUERY_RESULT>(Astro, {
@@ -36,11 +27,4 @@ const { data } = result;
       </div>
     )}
   </article>
-  <DebugPanel
-    perspective={result.perspective}
-    cacheStatus={result.cacheStatus}
-    cacheAge={result.cacheAge}
-    tags={result.tags}
-    ms={result.ms}
-  />
 </Layout>

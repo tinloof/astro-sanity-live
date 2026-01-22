@@ -13,37 +13,35 @@ import {
   DEFAULT_CACHE_MAX_AGE,
   DEFAULT_CACHE_SWR,
   DEFAULT_CACHE_KEY_PREFIX,
+  DEFAULT_PURGE_ENDPOINT,
+  DEFAULT_REFRESH_DEBOUNCE,
 } from './constants'
 import { cachedFetch, createCacheKey, createCacheResponse, addToTagIndex, type CacheOptions } from './cache'
+import { registerConfig, type SanityConfig, type LiveConfig, type StegaConfig } from './config-store'
 
-export type StegaConfig = {
+export type InitSanityConfig = {
   /**
-   * The URL to the Sanity Studio (e.g., '/cms' or 'https://my-studio.sanity.studio')
-   * @default '/cms'
+   * Additional Sanity client options
    */
-  studioUrl?: string
-}
-
-export type SanityLoaderConfig = {
   client?: Omit<ClientConfig, 'projectId' | 'dataset'>
   /**
    * Stega configuration for visual editing.
    * Stega is automatically enabled when in visual editing mode.
    */
-  stega?: StegaConfig
+  stega?: Partial<StegaConfig>
   /**
    * Default cache options for all queries.
    * Can be overridden per-query.
    */
   cache?: CacheOptions
+  /**
+   * Live content configuration for real-time updates.
+   */
+  live?: Partial<LiveConfig>
 }
 
-export type SanityConfig = {
-  projectId: string
-  dataset: string
-  apiVersion: string
-  useCdn?: boolean
-}
+// Re-export SanityConfig type
+export type { SanityConfig } from './config-store'
 
 type AstroGlobal = {
   cookies: {
@@ -86,16 +84,32 @@ export type LoadQueryResult<T> = {
   ms: number
 }
 
-type CreateSanityLoaderReturn = {
+type InitSanityReturn = {
+  /**
+   * Pre-configured Sanity client
+   */
   client: SanityClient
+  /**
+   * Sanity configuration (projectId, dataset, apiVersion)
+   */
   config: SanityConfig
   /**
-   * Load content from Sanity with visual editing support.
+   * Load content from Sanity with visual editing support and caching.
    */
   loadQuery: <T>(
     Astro: AstroGlobal,
     options: LoadQueryOptions
   ) => Promise<LoadQueryResult<T>>
+  /**
+   * SanityLive component for real-time cache invalidation.
+   * Include this in your layout to enable automatic updates when content changes.
+   */
+  SanityLive: typeof import('./live/index').SanityLive
+  /**
+   * VisualEditing component for click-to-edit in Sanity's Presentation tool.
+   * Include this in your layout to enable visual editing overlays.
+   */
+  VisualEditing: typeof import('./visual-editing/index').VisualEditing
 }
 
 // Default cache options - uses constants, can be overridden per-query
@@ -106,10 +120,34 @@ const DEFAULT_CACHE_OPTIONS: CacheOptions = {
 }
 
 /**
- * Creates a Sanity loader with support for visual editing.
- * Reads from PUBLIC_SANITY_PROJECT_ID and PUBLIC_SANITY_DATASET environment variables.
+ * Initialize Sanity for your Astro project.
+ *
+ * Returns a configured client and loadQuery function for fetching content.
+ * Configuration is read from environment variables:
+ * - PUBLIC_SANITY_PROJECT_ID (required)
+ * - PUBLIC_SANITY_DATASET (required)
+ * - PUBLIC_SANITY_API_VERSION (optional, defaults to '2025-10-01')
+ * - SANITY_API_READ_TOKEN (optional, for draft access in visual editing)
+ *
+ * @example
+ * ```ts
+ * // src/sanity/index.ts
+ * import { initSanity } from '@tinloof/sanity-astro'
+ *
+ * export const { client, config, loadQuery, SanityLive, VisualEditing } = await initSanity()
+ * ```
+ *
+ * @example
+ * ```ts
+ * // With custom options
+ * export const { client, config, loadQuery, SanityLive, VisualEditing } = await initSanity({
+ *   stega: { studioUrl: '/studio' },
+ *   cache: { maxAge: 300 },
+ *   live: { refreshDebounce: 200 },
+ * })
+ * ```
  */
-export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoaderReturn {
+export async function initSanity(config?: InitSanityConfig): Promise<InitSanityReturn> {
   const projectId = import.meta.env.PUBLIC_SANITY_PROJECT_ID
   const dataset = import.meta.env.PUBLIC_SANITY_DATASET
   const apiVersion = import.meta.env.PUBLIC_SANITY_API_VERSION
@@ -135,7 +173,14 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     useCdn: true,
   }
 
-  const stegaStudioUrl = config?.stega?.studioUrl || '/cms'
+  const stegaStudioUrl = config?.stega?.studioUrl ?? '/cms'
+
+  // Register config globally so components can access it
+  registerConfig({
+    sanity: sanityConfig,
+    live: config?.live,
+    stega: { studioUrl: stegaStudioUrl },
+  })
 
   // Token for draft access (server-side only, not PUBLIC_)
   const token = import.meta.env.SANITY_API_READ_TOKEN
@@ -219,7 +264,6 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
         Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
       }
     }
-    console.log('[Loader] lastLiveEventId:', lastLiveEventId ? lastLiveEventId.slice(0, 20) + '...' : 'none')
 
     // Only use drafts perspective if we have a token
     const perspective = visualEditing && token ? 'drafts' : 'published'
@@ -238,7 +282,6 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     // Determine if we should read from cache
     // When we have a lastLiveEventId, we bypass cache read to get fresh data from Sanity
     const shouldCache = !visualEditing && !lastLiveEventId && cacheOption !== false
-    console.log('[Loader] shouldCache:', shouldCache, '| visualEditing:', visualEditing, '| hasEventId:', !!lastLiveEventId)
 
     // Function to fetch from Sanity (returns data and tags for cache)
     const fetchFromSanity = async () => {
@@ -315,7 +358,29 @@ export function createSanityLoader(config?: SanityLoaderConfig): CreateSanityLoa
     }
   }
 
-  return { client, config: sanityConfig, loadQuery }
+  // Import components to return alongside the functions
+  // This allows: const { loadQuery, SanityLive, VisualEditing } = initSanity()
+  const { SanityLive } = await import('./live/index')
+  const { VisualEditing } = await import('./visual-editing/index')
+
+  return {
+    client,
+    config: sanityConfig,
+    loadQuery,
+    /**
+     * SanityLive component for real-time cache invalidation.
+     * Include this in your layout to enable automatic updates when content changes.
+     */
+    SanityLive,
+    /**
+     * VisualEditing component for click-to-edit in Sanity's Presentation tool.
+     * Include this in your layout to enable visual editing overlays.
+     */
+    VisualEditing,
+  }
 }
+
+// Keep the old name as an alias
+export const createSanityLoader = initSanity
 
 export { type SanityClient, type QueryParams }
