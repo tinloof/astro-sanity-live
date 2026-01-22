@@ -139,6 +139,217 @@ pnpm wrangler:dev
 
 ---
 
+## Data Fetching & Caching
+
+This starter includes `@tinloof/sanity-astro`, a package that provides optimized data fetching with a two-level caching architecture for maximum performance on Cloudflare Workers.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Browser Request                              │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    CDN Edge (Page Cache)                             │
+│         CDN-Cache-Control: max-age=3600, stale-while-revalidate     │
+│                                                                      │
+│  • Caches full HTML responses at Cloudflare edge                    │
+│  • Sub-50ms response times on cache HIT                             │
+│  • Requires custom domain (not workers.dev)                         │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │ MISS
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  Cloudflare Worker (Query Cache)                     │
+│              Cache API with manual SWR implementation                │
+│                                                                      │
+│  • Caches individual Sanity query results                           │
+│  • Serves stale data while revalidating in background               │
+│  • Works on workers.dev domains                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │ MISS
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Sanity API                                   │
+│                                                                      │
+│  • Fresh data fetched via GROQ                                      │
+│  • Returns syncTags for cache invalidation                          │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Quick Start
+
+```typescript
+// src/sanity/index.ts
+import { initSanity } from '@tinloof/sanity-astro'
+
+export const { client, loadQuery } = await initSanity({
+  // Query cache: individual GROQ results (works on workers.dev)
+  cache: {
+    maxAge: 60 * 60 * 24,           // 1 day
+    staleWhileRevalidate: 60 * 60 * 24 * 7,  // 1 week
+  },
+  // Page cache: full HTML responses (requires custom domain)
+  pageCache: {
+    maxAge: 60 * 60,                // 1 hour at CDN edge
+    staleWhileRevalidate: 60 * 60 * 24,  // 1 day SWR window
+    browserMaxAge: 60,              // 1 minute in browser
+  },
+})
+```
+
+```astro
+---
+// src/pages/index.astro
+import { loadQuery } from '@/sanity'
+
+const { data, cacheStatus, ms } = await loadQuery(Astro, {
+  query: `*[_type == "page" && slug.current == $slug][0]`,
+  params: { slug: 'home' },
+})
+---
+
+<h1>{data.title}</h1>
+<!-- cacheStatus: HIT | MISS | STALE | BYPASS -->
+<!-- ms: time taken in milliseconds -->
+```
+
+### `loadQuery()` API
+
+The `loadQuery()` function is the primary way to fetch data from Sanity. It handles caching, visual editing, and cache invalidation automatically.
+
+```typescript
+const result = await loadQuery<MyType>(Astro, {
+  query: string,           // GROQ query
+  params?: QueryParams,    // Query parameters
+  cache?: CacheOptions | false,      // Query cache options
+  pageCache?: PageCacheOptions | false,  // Page cache options
+})
+```
+
+**Returns:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `data` | `T` | The query result |
+| `perspective` | `'published' \| 'drafts'` | Current perspective |
+| `cacheStatus` | `'HIT' \| 'MISS' \| 'STALE' \| 'BYPASS'` | Query cache status |
+| `cacheAge` | `number \| undefined` | Age of cached data in seconds |
+| `tags` | `string[] \| undefined` | Sanity syncTags for invalidation |
+| `ms` | `number` | Time taken in milliseconds |
+
+### Cache Options
+
+#### Query Cache (CacheOptions)
+
+Controls the Cloudflare Cache API for individual query results.
+
+```typescript
+{
+  maxAge?: number,              // Fresh duration (default: 1 day)
+  staleWhileRevalidate?: number, // SWR window (default: 1 week)
+  keyPrefix?: string,           // Cache key prefix (default: 'sanity')
+}
+```
+
+#### Page Cache (PageCacheOptions)
+
+Controls CDN edge caching via response headers. **Requires a custom domain with Cloudflare proxy enabled.**
+
+```typescript
+{
+  maxAge?: number,              // CDN cache duration (default: 1 hour)
+  staleWhileRevalidate?: number, // CDN SWR window (default: 1 day)
+  browserMaxAge?: number,       // Browser cache (default: 60 seconds)
+  disabled?: boolean,           // Disable page caching
+}
+```
+
+### Disabling Cache Per-Request
+
+```typescript
+// Disable query cache only
+const result = await loadQuery(Astro, {
+  query: MY_QUERY,
+  cache: false,
+})
+
+// Disable page cache only
+const result = await loadQuery(Astro, {
+  query: MY_QUERY,
+  pageCache: false,
+})
+
+// Custom cache settings for this query
+const result = await loadQuery(Astro, {
+  query: MY_QUERY,
+  cache: { maxAge: 60, staleWhileRevalidate: 300 },
+  pageCache: { maxAge: 300, browserMaxAge: 30 },
+})
+```
+
+### Cache Invalidation with SanityLive
+
+The `<SanityLive />` component provides real-time cache invalidation when content changes in Sanity.
+
+```astro
+---
+// src/layouts/Layout.astro
+import { SanityLive } from '@tinloof/sanity-astro/live'
+---
+
+<html>
+  <body>
+    <slot />
+    <SanityLive client:only="react" />
+  </body>
+</html>
+```
+
+**How it works:**
+
+1. SanityLive connects to Sanity's live events API
+2. When content changes, Sanity sends the affected `syncTags`
+3. SanityLive calls the purge endpoint (`/api/sanity/purge`)
+4. The purge endpoint clears both query cache and page cache entries
+5. The page refreshes with fresh data
+
+**Response headers set by loadQuery():**
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `CDN-Cache-Control` | `public, max-age=3600, stale-while-revalidate=86400` | Cloudflare edge caching |
+| `Cache-Control` | `public, max-age=60, must-revalidate` | Browser caching |
+| `X-Sanity-Tags` | `s1:abc123,s1:def456` | Debug: Sanity syncTags |
+
+### Visual Editing
+
+Visual editing is automatically supported. When the `sanity-visual-editing` cookie is set:
+
+- Query cache is bypassed
+- Page cache headers are not set
+- Draft content is fetched with stega encoding
+- Content can be clicked to open in Sanity Studio
+
+### Custom Domain Requirement
+
+**Important:** Page-level CDN caching via `CDN-Cache-Control` headers only works with a custom domain proxied through Cloudflare.
+
+| Domain Type | Query Cache | Page Cache |
+|-------------|-------------|------------|
+| `*.workers.dev` | ✅ Works | ❌ Not supported |
+| Custom domain (Cloudflare proxy) | ✅ Works | ✅ Works |
+
+To enable page caching:
+
+1. Go to Cloudflare Dashboard → Workers & Pages → Your Worker → Settings → Domains & Routes
+2. Add a custom domain (e.g., `demo.yourdomain.com`)
+3. Verify `cf-cache-status: HIT` appears in response headers
+
+---
+
 ## Working with Sanity
 
 ### Schema Structure
