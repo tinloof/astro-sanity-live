@@ -2,60 +2,27 @@ import { useEffect, useRef } from 'react'
 import { createClient } from '@sanity/client'
 import type { PurgeResponse } from './purge-handler'
 
-// Cookie names must match the constants in constants.ts
 const LAST_LIVE_EVENT_ID_COOKIE = 'sanity-live-event-id'
 const VISUAL_EDITING_COOKIE = 'sanity-visual-editing'
 
-/**
- * Check if visual editing mode is active (in Presentation tool)
- */
 function isVisualEditingActive(): boolean {
   if (typeof document === 'undefined') return false
   return document.cookie.includes(`${VISUAL_EDITING_COOKIE}=true`)
 }
 
 export type SanityLiveProps = {
-  /**
-   * Sanity project ID
-   */
   projectId: string
-  /**
-   * Sanity dataset
-   */
   dataset: string
-  /**
-   * API version
-   */
   apiVersion: string
-  /**
-   * Whether to refresh the page after cache purge
-   */
   refreshOnPurge: boolean
-  /**
-   * Debounce delay before refreshing (ms)
-   */
   refreshDebounce: number
-  /**
-   * API endpoint for cache purge
-   */
   purgeEndpoint: string
 }
 
-/**
- * SanityLive component subscribes to Sanity's live events
- * and purges the Cloudflare cache when content changes.
- *
- * This component should be included in your layout to enable
- * real-time cache invalidation.
- */
-/**
- * Trigger page refresh via custom event (handled by Astro script)
- */
 function softRefresh() {
   window.dispatchEvent(new CustomEvent('sanity:refresh'))
 }
 
-// Time to wait after mount before processing events (prevents initial refresh)
 const MOUNT_GRACE_PERIOD = 1000
 
 export default function SanityLive({
@@ -72,7 +39,6 @@ export default function SanityLive({
   useEffect(() => {
     mountTimeRef.current = Date.now()
 
-    // Create Sanity client for live events
     const client = createClient({
       projectId,
       dataset,
@@ -80,21 +46,17 @@ export default function SanityLive({
       useCdn: false,
     })
 
-    // Subscribe to live events
     const subscription = client.live.events().subscribe({
       next: async (event) => {
-        // Skip events that arrive too soon after mount (initial sync)
+        // Skip events during mount grace period to avoid unnecessary refreshes
         if (Date.now() - mountTimeRef.current < MOUNT_GRACE_PERIOD) {
           return
         }
 
-        // Only handle events that have tags
         if (event.type === 'message' && event.tags && event.tags.length > 0) {
-          // Extract event ID - this tells Sanity's CDN to return fresh data
           const eventId = event.id
 
           try {
-            // Call purge API with tags and event ID
             const response = await fetch(purgeEndpoint, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -102,25 +64,32 @@ export default function SanityLive({
             })
 
             if (!response.ok) {
+              console.error('[SanityLive] Purge request failed:', response.status)
               return
             }
 
             const result = await response.json() as PurgeResponse
 
-            // Store the event ID in a cookie for fresh CDN data on next request
+            // Set cookie so the next page load uses lastLiveEventId
+            // This ensures Sanity CDN serves fresh content
             if (eventId) {
               document.cookie = `${LAST_LIVE_EVENT_ID_COOKIE}=${encodeURIComponent(eventId)}; path=/; max-age=60`
             }
 
-            // Refresh the page if enabled and cache was actually purged
-            // Skip if visual editing is active (VisualEditing component handles refresh)
-            if (refreshOnPurge && result.purgedKeys?.length > 0 && !isVisualEditingActive()) {
-              // Clear any pending refresh
+            // Determine if we should refresh
+            // Refresh if either query cache or page cache had entries purged
+            const hadPurgedContent =
+              (result.purgedQueryKeys?.length > 0) ||
+              (result.purgedPageUrls?.length > 0) ||
+              // Backward compatibility
+              (result.purgedKeys?.length > 0)
+
+            if (refreshOnPurge && hadPurgedContent && !isVisualEditingActive()) {
+              // Debounce refreshes to avoid rapid-fire updates
               if (refreshTimeoutRef.current) {
                 window.clearTimeout(refreshTimeoutRef.current)
               }
 
-              // Debounce the refresh
               refreshTimeoutRef.current = window.setTimeout(() => {
                 softRefresh()
               }, refreshDebounce)
@@ -132,7 +101,6 @@ export default function SanityLive({
       },
     })
 
-    // Cleanup
     return () => {
       if (refreshTimeoutRef.current) {
         window.clearTimeout(refreshTimeoutRef.current)
@@ -141,6 +109,5 @@ export default function SanityLive({
     }
   }, [projectId, dataset, apiVersion, refreshOnPurge, refreshDebounce, purgeEndpoint])
 
-  // This component doesn't render anything
   return null
 }

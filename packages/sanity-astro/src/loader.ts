@@ -13,34 +13,34 @@ import {
   DEFAULT_CACHE_MAX_AGE,
   DEFAULT_CACHE_SWR,
   DEFAULT_CACHE_KEY_PREFIX,
+  DEFAULT_PAGE_CACHE_MAX_AGE,
+  DEFAULT_PAGE_CACHE_SWR,
+  DEFAULT_BROWSER_CACHE_MAX_AGE,
+  NO_CACHE_ROUTE_PREFIXES,
   DEFAULT_PURGE_ENDPOINT,
   DEFAULT_REFRESH_DEBOUNCE,
 } from './constants'
-import { cachedFetch, createCacheKey, createCacheResponse, addToTagIndex, type CacheOptions } from './cache'
+import {
+  cachedFetch,
+  createCacheKey,
+  createCacheResponse,
+  addToTagIndex,
+  registerPageWithTags,
+  type CacheOptions,
+  type PageCacheOptions,
+} from './cache'
 import { registerConfig, type SanityConfig, type LiveConfig, type StegaConfig } from './config-store'
 
 export type InitSanityConfig = {
-  /**
-   * Additional Sanity client options
-   */
   client?: Omit<ClientConfig, 'projectId' | 'dataset'>
-  /**
-   * Stega configuration for visual editing.
-   * Stega is automatically enabled when in visual editing mode.
-   */
   stega?: Partial<StegaConfig>
-  /**
-   * Default cache options for all queries.
-   * Can be overridden per-query.
-   */
+  /** Query-level cache options */
   cache?: CacheOptions
-  /**
-   * Live content configuration for real-time updates.
-   */
+  /** Page-level CDN cache options */
+  pageCache?: PageCacheOptions
   live?: Partial<LiveConfig>
 }
 
-// Re-export SanityConfig type
 export type { SanityConfig } from './config-store'
 
 type AstroGlobal = {
@@ -50,93 +50,110 @@ type AstroGlobal = {
     delete: (name: string, options?: { path?: string }) => void
   }
   url: URL
+  request?: Request
+  response?: {
+    headers: Headers
+  }
   locals?: {
-    // Cloudflare adapter puts ctx directly on locals (not nested under runtime)
-    ctx?: { waitUntil: (promise: Promise<unknown>) => void }
-    // Some setups may have it nested
+    ctx?: {
+      waitUntil: (promise: Promise<unknown>) => void
+    }
     runtime?: {
-      ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+      ctx?: {
+        waitUntil: (promise: Promise<unknown>) => void
+      }
     }
   }
 }
 
-export type LoadQueryOptions = {
+export type LoadQueryOptions<T = unknown> = {
   query: string
   params?: QueryParams
-  /**
-   * Cache options for this query.
-   * Set to `false` to disable caching.
-   * @default { maxAge: 86400, staleWhileRevalidate: 604800 }
-   */
+  /** Query cache options. Set to false to disable query caching. */
   cache?: CacheOptions | false
+  /**
+   * Page cache options. Controls CDN-Cache-Control headers.
+   * Set to false to disable page caching for this request.
+   * Only the first loadQuery() call's pageCache options are used per request.
+   */
+  pageCache?: PageCacheOptions | false
 }
 
 export type LoadQueryResult<T> = {
   data: T
   perspective: 'published' | 'drafts'
-  /** Cache status - HIT, MISS, STALE, or BYPASS (for visual editing) */
   cacheStatus: 'HIT' | 'MISS' | 'STALE' | 'BYPASS'
-  /** Cache age in seconds (if cached) */
   cacheAge?: number
-  /** Sanity sync tags for cache invalidation */
   tags?: string[]
-  /** Query execution time in milliseconds */
   ms: number
 }
 
 type InitSanityReturn = {
-  /**
-   * Pre-configured Sanity client
-   */
   client: SanityClient
-  /**
-   * Sanity configuration (projectId, dataset, apiVersion)
-   */
   config: SanityConfig
-  /**
-   * Load content from Sanity with visual editing support and caching.
-   */
   loadQuery: <T>(
     Astro: AstroGlobal,
-    options: LoadQueryOptions
+    options: LoadQueryOptions<T>
   ) => Promise<LoadQueryResult<T>>
 }
 
-// Default cache options - uses constants, can be overridden per-query
 const DEFAULT_CACHE_OPTIONS: CacheOptions = {
   maxAge: DEFAULT_CACHE_MAX_AGE,
   staleWhileRevalidate: DEFAULT_CACHE_SWR,
   keyPrefix: DEFAULT_CACHE_KEY_PREFIX,
 }
 
+const DEFAULT_PAGE_CACHE_OPTIONS: PageCacheOptions = {
+  maxAge: DEFAULT_PAGE_CACHE_MAX_AGE,
+  staleWhileRevalidate: DEFAULT_PAGE_CACHE_SWR,
+  browserMaxAge: DEFAULT_BROWSER_CACHE_MAX_AGE,
+  disabled: false,
+}
+
 /**
- * Initialize Sanity for your Astro project.
- *
- * Returns a configured client and loadQuery function for fetching content.
- * Configuration is read from environment variables:
- * - PUBLIC_SANITY_PROJECT_ID (required)
- * - PUBLIC_SANITY_DATASET (required)
- * - PUBLIC_SANITY_API_VERSION (optional, defaults to '2025-10-01')
- * - SANITY_API_READ_TOKEN (optional, for draft access in visual editing)
- *
- * @example
- * ```ts
- * // src/sanity/index.ts
- * import { initSanity } from '@tinloof/sanity-astro'
- *
- * export const { client, config, loadQuery, SanityLive, VisualEditing } = await initSanity()
- * ```
- *
- * @example
- * ```ts
- * // With custom options
- * export const { client, config, loadQuery, SanityLive, VisualEditing } = await initSanity({
- *   stega: { studioUrl: '/studio' },
- *   cache: { maxAge: 300 },
- *   live: { refreshDebounce: 200 },
- * })
- * ```
+ * Check if the current route should skip page caching.
+ * This is a safety check - these routes typically don't call loadQuery() anyway.
  */
+function shouldSkipPageCache(url: URL): boolean {
+  const pathname = url.pathname
+  return NO_CACHE_ROUTE_PREFIXES.some(prefix => pathname.startsWith(prefix))
+}
+
+/**
+ * Collect tags from all loadQuery() calls in a single page request.
+ * This is stored in Astro.locals to aggregate tags across multiple queries.
+ */
+function collectPageTags(locals: AstroGlobal['locals'], tags: string[] | undefined): string[] {
+  if (!locals || !tags?.length) return []
+
+  const allTags = (locals as Record<string, unknown>).__sanityPageTags as string[] | undefined ?? []
+  const newTags = tags.filter(tag => !allTags.includes(tag))
+
+  if (newTags.length > 0) {
+    const combined = [...allTags, ...newTags]
+    ;(locals as Record<string, unknown>).__sanityPageTags = combined
+    return combined
+  }
+
+  return allTags
+}
+
+/**
+ * Check if page cache headers have already been set for this request.
+ */
+function hasPageCacheHeadersSet(locals: AstroGlobal['locals']): boolean {
+  if (!locals) return false
+  return (locals as Record<string, unknown>).__sanityPageCacheSet === true
+}
+
+/**
+ * Mark that page cache headers have been set for this request.
+ */
+function markPageCacheHeadersSet(locals: AstroGlobal['locals']): void {
+  if (!locals) return
+  ;(locals as Record<string, unknown>).__sanityPageCacheSet = true
+}
+
 export async function initSanity(config?: InitSanityConfig): Promise<InitSanityReturn> {
   const projectId = import.meta.env.PUBLIC_SANITY_PROJECT_ID
   const dataset = import.meta.env.PUBLIC_SANITY_DATASET
@@ -144,15 +161,13 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
 
   if (!projectId) {
     throw new Error(
-      'PUBLIC_SANITY_PROJECT_ID environment variable is not defined. ' +
-        'Add it to your .env file or astro.config.mjs env schema.'
+      'PUBLIC_SANITY_PROJECT_ID environment variable is not defined.'
     )
   }
 
   if (!dataset) {
     throw new Error(
-      'PUBLIC_SANITY_DATASET environment variable is not defined. ' +
-        'Add it to your .env file or astro.config.mjs env schema.'
+      'PUBLIC_SANITY_DATASET environment variable is not defined.'
     )
   }
 
@@ -165,37 +180,36 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
 
   const stegaStudioUrl = config?.stega?.studioUrl ?? '/cms'
 
-  // Register config globally so components can access it
   registerConfig({
     sanity: sanityConfig,
     live: config?.live,
     stega: { studioUrl: stegaStudioUrl },
   })
 
-  // Token for draft access (server-side only, not PUBLIC_)
   const token = import.meta.env.SANITY_API_READ_TOKEN
 
-  // Regular client without stega (for production)
   const client = sanityCreateClient({
     ...sanityConfig,
     ...config?.client,
   })
 
-  // Client with stega and token for visual editing (draft access)
   const stegaClient = sanityCreateClient({
     ...sanityConfig,
     ...config?.client,
     token,
-    useCdn: false, // Can't use CDN with token/drafts
+    useCdn: false,
     stega: {
       enabled: true,
       studioUrl: stegaStudioUrl,
     },
   })
 
-  /**
-   * Write data to cache with tags for invalidation.
-   */
+  // Merge global page cache options with defaults
+  const globalPageCacheOptions: PageCacheOptions = {
+    ...DEFAULT_PAGE_CACHE_OPTIONS,
+    ...config?.pageCache,
+  }
+
   async function writeToCache(
     query: string,
     params: QueryParams,
@@ -204,7 +218,6 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
     options: CacheOptions
   ): Promise<void> {
     if (typeof caches === 'undefined') return
-
     const cache = caches.default
     if (!cache) return
 
@@ -222,73 +235,118 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
     }
   }
 
-  /**
-   * Check if visual editing is enabled for this request.
-   * Visual editing is enabled when the cookie is set (by the client-side
-   * component when it detects it's inside Sanity's Presentation tool iframe).
-   */
   function isVisualEditingEnabled(Astro: AstroGlobal): boolean {
     const cookie = Astro.cookies.get(VISUAL_EDITING_ENABLED)
     return cookie?.value === 'true'
   }
 
+  /**
+   * Set page-level cache headers on the Astro response.
+   * This enables CDN caching of the full HTML page with SWR semantics.
+   *
+   * Headers set:
+   * - CDN-Cache-Control: For Cloudflare edge cache (uses max-age + stale-while-revalidate)
+   * - Cache-Control: For browser cache (shorter, with must-revalidate)
+   * - X-Sanity-Tags: Sanity sync tags for debugging/logging
+   */
+  function setPageCacheHeaders(
+    Astro: AstroGlobal,
+    tags: string[],
+    options: PageCacheOptions
+  ): void {
+    // Skip if no response object (shouldn't happen in SSR)
+    if (!Astro.response?.headers) return
+
+    // Skip if headers already set (multiple loadQuery calls)
+    if (hasPageCacheHeadersSet(Astro.locals)) return
+
+    // Skip if page caching is disabled
+    if (options.disabled) return
+
+    // Skip for routes that shouldn't be cached
+    if (shouldSkipPageCache(Astro.url)) return
+
+    const maxAge = options.maxAge ?? DEFAULT_PAGE_CACHE_MAX_AGE
+    const swr = options.staleWhileRevalidate ?? DEFAULT_PAGE_CACHE_SWR
+    const browserMaxAge = options.browserMaxAge ?? DEFAULT_BROWSER_CACHE_MAX_AGE
+
+    // CDN-Cache-Control: Tells Cloudflare how to cache at the edge
+    // Cloudflare will cache for maxAge, then serve stale for swr window while revalidating
+    Astro.response.headers.set(
+      'CDN-Cache-Control',
+      `public, max-age=${maxAge}, stale-while-revalidate=${swr}`
+    )
+
+    // Cache-Control: Browser cache - shorter duration with must-revalidate
+    // This ensures browsers check for fresh content more frequently
+    Astro.response.headers.set(
+      'Cache-Control',
+      `public, max-age=${browserMaxAge}, must-revalidate`
+    )
+
+    // X-Sanity-Tags: For debugging and logging (visible in response headers)
+    if (tags.length > 0) {
+      Astro.response.headers.set('X-Sanity-Tags', tags.join(','))
+    }
+
+    // Mark headers as set to prevent duplicate setting
+    markPageCacheHeadersSet(Astro.locals)
+  }
+
   async function loadQuery<T>(
     Astro: AstroGlobal,
-    { query, params = {}, cache: cacheOption }: LoadQueryOptions
+    { query, params = {}, cache: cacheOption, pageCache: pageCacheOption }: LoadQueryOptions<T>
   ): Promise<LoadQueryResult<T>> {
     const startTime = performance.now()
-
     const visualEditing = isVisualEditingEnabled(Astro)
 
-    // Check for lastLiveEventId - first from locals (already read this request), then from cookie
-    // This tells Sanity's CDN to return fresh data, bypassing any stale cached content
-    let lastLiveEventId = (Astro.locals as any)?.__sanityLastLiveEventId as string | undefined
-
+    // Check for lastLiveEventId (indicates recent content change)
+    let lastLiveEventId = (Astro.locals as Record<string, unknown>)?.__sanityLastLiveEventId as string | undefined
     if (!lastLiveEventId) {
-      // First query in this request - read from cookie and store in locals
       lastLiveEventId = Astro.cookies.get(LAST_LIVE_EVENT_ID_COOKIE)?.value
       if (lastLiveEventId) {
-        // Store in locals so subsequent queries in this request can use it
-        ;(Astro.locals as any).__sanityLastLiveEventId = lastLiveEventId
-        // Clear the cookie (single use across requests, not queries)
+        ;(Astro.locals as Record<string, unknown>).__sanityLastLiveEventId = lastLiveEventId
         Astro.cookies.delete(LAST_LIVE_EVENT_ID_COOKIE, { path: '/' })
       }
     }
 
-    // Only use drafts perspective if we have a token
     const perspective = visualEditing && token ? 'drafts' : 'published'
     const activeClient = visualEditing ? stegaClient : client
-
-    // Get Cloudflare execution context for caching
     const ctx = Astro.locals?.ctx ?? Astro.locals?.runtime?.ctx ?? null
 
-    // Merge cache options (used for both caching and re-caching after eventId fetch)
+    // Merge cache options
     const mergedCacheOptions = {
       ...DEFAULT_CACHE_OPTIONS,
       ...config?.cache,
       ...(typeof cacheOption === 'object' ? cacheOption : {}),
     }
 
-    // Determine if we should read from cache
-    // When we have a lastLiveEventId, we bypass cache read to get fresh data from Sanity
+    // Merge page cache options
+    const mergedPageCacheOptions: PageCacheOptions = pageCacheOption === false
+      ? { ...globalPageCacheOptions, disabled: true }
+      : {
+          ...globalPageCacheOptions,
+          ...(typeof pageCacheOption === 'object' ? pageCacheOption : {}),
+        }
+
+    // Determine if query caching should be used
     const shouldCache = !visualEditing && !lastLiveEventId && cacheOption !== false
 
-    // Function to fetch from Sanity (returns data and tags for cache)
+    // Determine if page caching should be used
+    const shouldSetPageHeaders = !visualEditing && !mergedPageCacheOptions.disabled
+
     const fetchFromSanity = async () => {
       const options = {
         filterResponse: false,
         perspective,
-        useCdn: !visualEditing, // Always use CDN for published content (event ID handles freshness)
+        useCdn: !visualEditing,
         resultSourceMap: visualEditing ? 'withKeyArraySelector' : false,
-        // Pass lastLiveEventId to Sanity to get fresh data from CDN
         ...(lastLiveEventId && { lastLiveEventId }),
-        // Disable browser cache for visual editing
         ...(visualEditing && { cache: 'no-store' }),
       }
 
       const response = await activeClient.fetch(query, params, options as Parameters<typeof activeClient.fetch>[2])
 
-      // Return both result and syncTags for cache invalidation
       return {
         data: response,
         tags: response.syncTags as string[] | undefined,
@@ -301,7 +359,6 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
     let tags: string[] | undefined
 
     try {
-      // Use caching for production queries (non-visual-editing)
       if (shouldCache) {
         const cacheResult = await cachedFetch<{ result: T; syncTags?: string[] }>(
           ctx,
@@ -316,14 +373,12 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
         cacheAge = cacheResult.age
         tags = cacheResult.data.syncTags
       } else {
-        // Direct fetch - bypassing cache read but still update cache with fresh data
         const { data: response, tags: responseTags } = await fetchFromSanity()
         result = response.result as T
         tags = responseTags
         cacheStatus = 'BYPASS'
 
-        // Re-populate cache with fresh data and tags (critical for tag index!)
-        // This ensures subsequent live events will match the updated syncTags
+        // Still cache in background for subsequent requests (if not visual editing)
         if (!visualEditing && ctx && typeof caches !== 'undefined') {
           ctx.waitUntil(
             writeToCache(query, params, response, responseTags, mergedCacheOptions)
@@ -331,9 +386,23 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
         }
       }
     } catch (error) {
-      // If fetch fails, throw with more context
       const message = error instanceof Error ? error.message : 'Unknown error'
       throw new Error(`[Sanity Loader] Failed to fetch: ${message}`)
+    }
+
+    // Collect all tags from queries on this page
+    const allPageTags = collectPageTags(Astro.locals, tags)
+
+    // Set page cache headers (only on first query, subsequent calls are no-ops)
+    if (shouldSetPageHeaders && allPageTags.length > 0) {
+      setPageCacheHeaders(Astro, allPageTags, mergedPageCacheOptions)
+    }
+
+    // Register page URL with tags for cache invalidation
+    // This allows us to purge the page when content changes
+    if (shouldSetPageHeaders && tags?.length && ctx) {
+      const pageUrl = Astro.url.href
+      registerPageWithTags(ctx, pageUrl, tags)
     }
 
     const ms = Math.round(performance.now() - startTime)
@@ -351,7 +420,7 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
   return { client, config: sanityConfig, loadQuery }
 }
 
-// Keep the old name as an alias
 export const createSanityLoader = initSanity
 
 export { type SanityClient, type QueryParams }
+export { type PageCacheOptions } from './cache'
