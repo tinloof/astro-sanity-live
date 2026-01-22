@@ -17,11 +17,11 @@ export default defineConfig({
   title: "Brandyour CF",
   projectId: process.env.SANITY_STUDIO_PROJECT_ID || "fl1nk1cy",
   dataset: process.env.SANITY_STUDIO_DATASET || "production",
+  basePath: "/cms",
   plugins: [
     structureTool(),
     presentationTool({
-      // The ?sanity-visual-editing param triggers visual editing mode via cookie
-      previewUrl: `${previewUrl}?sanity-visual-editing`,
+      previewUrl,
     }),
     visionTool(),
   ],

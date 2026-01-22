@@ -100,16 +100,6 @@ type InitSanityReturn = {
     Astro: AstroGlobal,
     options: LoadQueryOptions
   ) => Promise<LoadQueryResult<T>>
-  /**
-   * SanityLive component for real-time cache invalidation.
-   * Include this in your layout to enable automatic updates when content changes.
-   */
-  SanityLive: typeof import('./live/index').SanityLive
-  /**
-   * VisualEditing component for click-to-edit in Sanity's Presentation tool.
-   * Include this in your layout to enable visual editing overlays.
-   */
-  VisualEditing: typeof import('./visual-editing/index').VisualEditing
 }
 
 // Default cache options - uses constants, can be overridden per-query
@@ -358,26 +348,7 @@ export async function initSanity(config?: InitSanityConfig): Promise<InitSanityR
     }
   }
 
-  // Import components to return alongside the functions
-  // This allows: const { loadQuery, SanityLive, VisualEditing } = initSanity()
-  const { SanityLive } = await import('./live/index')
-  const { VisualEditing } = await import('./visual-editing/index')
-
-  return {
-    client,
-    config: sanityConfig,
-    loadQuery,
-    /**
-     * SanityLive component for real-time cache invalidation.
-     * Include this in your layout to enable automatic updates when content changes.
-     */
-    SanityLive,
-    /**
-     * VisualEditing component for click-to-edit in Sanity's Presentation tool.
-     * Include this in your layout to enable visual editing overlays.
-     */
-    VisualEditing,
-  }
+  return { client, config: sanityConfig, loadQuery }
 }
 
 // Keep the old name as an alias

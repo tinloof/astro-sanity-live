@@ -2,7 +2,9 @@
 import { ClientRouter } from "astro:transitions";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { loadQuery, SanityLive, VisualEditing } from "@/sanity";
+import { loadQuery } from "@/sanity";
+import { SanityLive } from "@tinloof/sanity-astro/live";
+import { VisualEditing } from "@tinloof/sanity-astro/visual-editing";
 import { SETTINGS_QUERY } from "@/sanity/queries";
 import type { SETTINGS_QUERY_RESULT } from "@/sanity/types";
 import "../styles/global.css";

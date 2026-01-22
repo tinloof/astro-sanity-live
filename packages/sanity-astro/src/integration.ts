@@ -123,9 +123,3 @@ export default function sanityIntegration(config: SanityIntegrationConfig = {}):
 }
 
 export type { SanityIntegrationConfig as Config }
-
-// Re-export main APIs for convenience
-export { initSanity, createSanityLoader } from './loader'
-export type { InitSanityConfig, LoadQueryOptions, LoadQueryResult, SanityConfig } from './loader'
-export { SanityLive } from './live/index'
-export { VisualEditing } from './visual-editing/index'
