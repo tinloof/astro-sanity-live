@@ -1,17 +1,13 @@
 {
+  "name": "astro-caching-demo",
   "main": "dist/_worker.js/index.js",
-  "name": "astro-sanity-live",
   "compatibility_date": "2026-01-16",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
-    "directory": "./dist",
+    "directory": "./dist"
   },
-  "observability": {
-    "enabled": true,
-  },
-  "vars": {
-    "PUBLIC_SANITY_PROJECT_ID": "fl1nk1cy",
-    "PUBLIC_SANITY_DATASET": "production",
-  },
+  "routes": [
+    { "pattern": "astro.stelko.xyz", "custom_domain": true }
+  ]
 }

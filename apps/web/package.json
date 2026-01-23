@@ -1,40 +1,16 @@
 {
-  "name": "@apps/web",
-  "type": "module",
-  "version": "0.0.1",
-  "scripts": {
-    "dev": "astro dev --port 3000",
-    "wrangler:dev": "pnpm build && wrangler dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro",
-    "wrangler:deploy": "wrangler deploy",
-    "typegen": "sanity schema extract && sanity typegen generate",
-    "typegen:watch": "watch \"pnpm run typegen\" ./src/sanity"
-  },
-  "dependencies": {
-    "@astrojs/cloudflare": "^12.6.12",
-    "@astrojs/react": "^4.4.2",
-    "@portabletext/react": "^6.0.0",
-    "@sanity/client": "^7.14.0",
-    "@sanity/vision": "^5.5.0",
-    "@tailwindcss/typography": "^0.5.19",
-    "@tailwindcss/vite": "^4.1.18",
-    "@tinloof/sanity-astro": "workspace:*",
-    "@types/react": "^19.2.8",
-    "@types/react-dom": "^19.2.3",
-    "astro": "^5.16.10",
-    "groq": "^5.4.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "sanity": "^5.4.0",
-    "styled-components": "^6.3.8",
-    "tailwindcss": "^4.1.18"
-  },
-  "devDependencies": {
-    "@astrojs/check": "^0.9.6",
-    "typescript": "^5.9.3",
-    "watch": "^1.0.2",
-    "wrangler": "^4.50.0"
-  }
+	"name": "astro-caching-demo",
+	"type": "module",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"deploy": "astro build && wrangler deploy"
+	},
+	"dependencies": {
+		"@astrojs/cloudflare": "^12.6.12",
+		"astro": "^5.16.15"
+	},
+	"devDependencies": {
+		"wrangler": "^4.60.0"
+	}
 }
