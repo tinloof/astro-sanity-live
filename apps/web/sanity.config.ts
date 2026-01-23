@@ -6,8 +6,7 @@ import { structureTool } from "sanity/structure";
 import { schemaTypes } from "./src/sanity/schema";
 
 // Detect environment and set preview URL accordingly
-// In production builds, use the production URL
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = import.meta.env.PROD;
 const previewUrl = isProduction
   ? "https://astro-sanity-live.seif.workers.dev"
   : "http://localhost:3000";
@@ -15,8 +14,8 @@ const previewUrl = isProduction
 export default defineConfig({
   name: "default",
   title: "Brandyour CF",
-  projectId: process.env.SANITY_STUDIO_PROJECT_ID || "fl1nk1cy",
-  dataset: process.env.SANITY_STUDIO_DATASET || "production",
+  projectId: import.meta.env.PUBLIC_SANITY_PROJECT_ID || "fl1nk1cy",
+  dataset: import.meta.env.PUBLIC_SANITY_DATASET || "production",
   basePath: "/cms",
   plugins: [
     structureTool(),

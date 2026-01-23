@@ -1,0 +1,27 @@
+---
+import type { SETTINGS_QUERY_RESULT } from "../../sanity.types";
+
+interface Props {
+  siteName: SETTINGS_QUERY_RESULT["siteName"];
+  navigation: SETTINGS_QUERY_RESULT["navigation"];
+}
+
+const { siteName = "Home", navigation = [] } = Astro.props;
+---
+
+<header class="bg-white border-b border-gray-200 px-6 py-4">
+  <nav class="flex justify-between items-center max-w-6xl mx-auto">
+    <a href="/" class="font-bold text-xl text-gray-900 hover:text-gray-600 transition-colors">
+      {siteName}
+    </a>
+    <ul class="flex gap-8 list-none m-0 p-0">
+      {navigation?.map((link) => (
+        <li>
+          <a href={link.href} class="text-gray-600 hover:text-gray-900 transition-colors">
+            {link.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</header>

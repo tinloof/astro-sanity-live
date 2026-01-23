@@ -1,22 +1,21 @@
 ---
-// Simulate a data fetch (like calling Sanity)
-const data = {
-  title: "Hello from Cloudflare Workers",
-  timestamp: new Date().toISOString(),
-}
+import Layout from "../layouts/layout.astro";
+import { loadQuery } from "../sanity/client";
+import { HOME_QUERY } from "../sanity/queries";
+import type { HOME_QUERY_RESULT } from "../../sanity.types";
+
+const data = await loadQuery<HOME_QUERY_RESULT>(HOME_QUERY);
 
 // Set cache headers
 Astro.response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=3600')
 Astro.response.headers.set('Cache-Tag', 'page:home')
 ---
 
-<html>
-  <head>
-    <title>{data.title}</title>
-  </head>
-  <body>
-    <h1>{data.title}</h1>
-    <p>Generated at: {data.timestamp}</p>
-    <p>If caching works, this timestamp should stay the same on refresh.</p>
-  </body>
-</html>
+<Layout>
+  <article>
+    <h1 class="text-4xl font-bold text-gray-900 mb-4">{data?.title}</h1>
+    {data?.description && (
+      <p class="text-lg text-gray-600 leading-relaxed">{data.description}</p>
+    )}
+  </article>
+</Layout>

@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Disable view transition animations */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}

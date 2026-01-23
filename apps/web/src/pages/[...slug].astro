@@ -1,0 +1,30 @@
+---
+import Layout from "../layouts/layout.astro";
+import { loadQuery } from "../sanity/client";
+import { PAGE_QUERY } from "../sanity/queries";
+import type { PAGE_QUERY_RESULT } from "../../sanity.types";
+import { PortableText } from "@portabletext/react";
+
+const { slug } = Astro.params;
+
+const data = await loadQuery<PAGE_QUERY_RESULT>(PAGE_QUERY, { slug });
+
+if (!data) {
+  return Astro.redirect("/404");
+}
+
+// Set cache headers
+Astro.response.headers.set('Cache-Control', 'public, max-age=60, s-maxage=3600')
+Astro.response.headers.set('Cache-Tag', `page:${slug}`)
+---
+
+<Layout>
+  <article>
+    <h1 class="text-4xl font-bold text-gray-900 mb-6">{data.title}</h1>
+    {data.content && (
+      <div class="prose prose-lg prose-gray">
+        <PortableText value={data.content} />
+      </div>
+    )}
+  </article>
+</Layout>

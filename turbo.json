@@ -24,19 +24,19 @@
       "outputs": ["schema.json", "sanity.types.ts"],
       "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET"]
     },
-    "@apps/web#typegen:watch": {
+    "astro-caching-demo#typegen:watch": {
       "outputs": ["schema.json", "sanity.types.ts"],
       "cache": false,
       "persistent": true
     },
-    "@apps/web#build": {
-      "dependsOn": ["@apps/web#typegen"],
+    "astro-caching-demo#build": {
+      "dependsOn": ["astro-caching-demo#typegen"],
       "outputs": ["dist/**"],
       "cache": true,
       "env": ["PUBLIC_SANITY_PROJECT_ID", "PUBLIC_SANITY_DATASET", "SANITY_API_READ_TOKEN"]
     },
-    "@apps/web#dev": {
-      "with": ["@apps/web#typegen:watch"],
+    "astro-caching-demo#dev": {
+      "with": ["astro-caching-demo#typegen:watch"],
       "persistent": true
     }
   }
